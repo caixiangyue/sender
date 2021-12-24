@@ -14,7 +14,7 @@ class Mail:
     def send_email(self, to: str, content: str):
         msg = MIMEText(content,'plain','utf-8')
         msg['subject'] = SUBJECT
-        msg['from'] = formataddr(['action',SENDER])
+        msg['from'] = formataddr(['小C',SENDER])
         msg['to']   = formataddr(['to', to])
         self.server.sendmail(SENDER, [to], msg.as_string())
     

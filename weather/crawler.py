@@ -1,5 +1,4 @@
 import requests
-import json
 
 URL = 'http://t.weather.itboy.net/api/weather/city/101010100'
 
@@ -7,7 +6,7 @@ class Crawler:
     def __init__(self):
         pass
 
-    def get_weather(self) -> str:
+    def get_weather_msg(self) -> str:
         r = requests.get(URL)
         json_dict = r.json()
         json_data = json_dict['data']
