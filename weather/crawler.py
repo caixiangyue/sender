@@ -1,4 +1,5 @@
 import requests
+import time
 
 URL = 'http://t.weather.itboy.net/api/weather/city/101010100'
 
@@ -7,7 +8,18 @@ class Crawler:
         pass
 
     def get_weather_msg(self) -> str:
-        r = requests.get(URL)
+        retry_times = 3
+        while retry_times > 0:
+            try:
+                r = requests.get(URL)
+                break
+            except Exception as e:
+                retry_times -= 1
+                print(e)
+                if retry_times == 0:
+                    return ''
+                time.sleep(1)
+            
         json_dict = r.json()
         json_data = json_dict['data']
         json_forecast = json_data['forecast']
