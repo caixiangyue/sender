@@ -2,6 +2,8 @@ import requests
 import time
 from lxml import etree
 
+from common.utils import HEADERS
+
 URL = "https://github.com/trending"
 
 class Crawler:
@@ -12,7 +14,7 @@ class Crawler:
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(URL)
+                r = requests.get(URL, headers=HEADERS)
                 if r.status_code != 200:
                     continue
                 break
