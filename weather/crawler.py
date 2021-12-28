@@ -36,5 +36,5 @@ class Crawler:
         ret += f'{json_forecast[1]["week"]}\n'
         ret += f'{json_forecast[1]["type"]} {json_forecast[1]["low"]} {json_forecast[1]["high"]}\n'
         ret += f'{json_forecast[1]["fx"]} {json_forecast[1]["fl"]}\n'
-        ret += f'日出 {json_forecast[1]["sunrise"]} 日落 {json_forecast[1]["sunset"]}\n'
+        ret += f'日出 {json_forecast[1]["sunrise"]} 日落 {json_forecast[1]["sunset"]}\n\n'
         return ret

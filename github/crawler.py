@@ -23,7 +23,7 @@ class Crawler:
                     return ''
                 time.sleep(1)
 
-        ret = 'github trending\n'
+        ret = '获取 github trending 。。。\n'
         dom = etree.HTML(r.content)
         div = dom.xpath('//div[@class="Box"]/div[2]')
         for i in range(25):
@@ -35,12 +35,13 @@ class Crawler:
             for d in p:
                 desc += d
             
-            ret += f'{i+1}.{text}\n'
+            ret += f'{i+1} {text}\n'
             ret += f'{desc}\n'
             ret += f'{href}\n'
+        ret += '\n'
         return ret
 
             
 
-c = Crawler()
-print(c.get_trending_msg())
+# c = Crawler()
+# print(c.get_trending_msg())
