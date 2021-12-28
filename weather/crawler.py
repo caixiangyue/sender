@@ -12,6 +12,8 @@ class Crawler:
         while retry_times > 0:
             try:
                 r = requests.get(URL)
+                if r.status_code != 200:
+                    continue
                 break
             except Exception as e:
                 retry_times -= 1
@@ -23,7 +25,7 @@ class Crawler:
         json_dict = r.json()
         json_data = json_dict['data']
         json_forecast = json_data['forecast']
-        ret = f'查询北京天气。。。。返回码：{r.status_code}\n'
+        ret = f'查询北京天气。。。\n'
         ret += f'{json_forecast[0]["week"]}\n'
         ret += f'空气质量：{json_data["quality"]}\n'
         ret += f'提示：{json_data["ganmao"]}\n'
