@@ -28,14 +28,21 @@ class Crawler:
         ret = '获取 github trending 。。。\n'
         dom = etree.HTML(r.content)
         div = dom.xpath('//div[@class="Box"]/div[2]')
-        for i in range(25):
-            text = div[0].xpath(f'//article[{i+1}]/h1/a/text()')[2]
-            href = div[0].xpath(f'//article[{i+1}]/h1/a/@href')[0]
-            p = div[0].xpath(f'//article[{i+1}]/p/text()')
-            href = f'https://github.com{href}'
+        for i in range(20):
+            text_list = div[0].xpath(f'//article[{i+1}]/h1/a/text()')
+            href_list = div[0].xpath(f'//article[{i+1}]/h1/a/@href')
+            if len(text_list) == 0 or len(href_list) == 0:
+                break
+
+            p_list = div[0].xpath(f'//article[{i+1}]/p/text()')
+            href = f'https://github.com{href_list[0]}'
+            
+            text = ''
+            for t in text_list:
+                text += t.strip().replace('\n', '')
             desc = ''
-            for d in p:
-                desc += d
+            for p in p_list:
+                desc += p
             
             ret += f'{i+1} {text}\n'
             ret += f'{desc}\n'
