@@ -1,3 +1,4 @@
+import os
 from mail.constant import SENDER, TO
 from mail.mail import make_mail
 from weather.crawler import Crawler as weatherCrawler
@@ -9,6 +10,8 @@ if __name__ == "__main__":
     w = weatherCrawler()
     g = githubCrawler()
     msg += w.get_weather_msg()
+    p = os.popen('./cu -wb')
+    msg += p.read()
     msg += g.get_trending_msg()
     with make_mail() as m:
         m.send_email(TO, msg)
