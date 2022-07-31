@@ -4,6 +4,7 @@ from mail.mail import make_mail
 from weather.crawler import Crawler as weatherCrawler
 from github.crawler import Crawler as githubCrawler
 from stock.crawler import Crawler as stockCrawler
+from yiyan.crawler import Crawler as yiyanCrawler
 from date.commemoration import get_together_days_msg
 
 if __name__ == "__main__":
@@ -11,7 +12,9 @@ if __name__ == "__main__":
     w = weatherCrawler()
     g = githubCrawler()
     s = stockCrawler()
+    y = yiyanCrawler()
     msg += w.get_weather_msg()
+    msg += y.get_msg()
     msg += s.get_gnp()
     p = os.popen('./cu -wb')
     msg += p.read()
