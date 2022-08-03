@@ -6,3 +6,4 @@ PORT = 465
 PASSCODE = os.environ['PASS_KEY']
 SENDER = os.environ['SENDER']
 TO = os.environ['TO']
+TO1 = os.environ['TO1']

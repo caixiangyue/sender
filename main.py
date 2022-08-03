@@ -1,5 +1,5 @@
 import os
-from mail.constant import SENDER, TO
+from mail.constant import SENDER, TO, TO1
 from mail.mail import make_mail
 from weather.crawler import Crawler as weatherCrawler
 from github.crawler import Crawler as githubCrawler
@@ -22,3 +22,7 @@ if __name__ == "__main__":
     with make_mail() as m:
         m.send_email(TO, msg)
         m.send_email(SENDER, msg)
+        index = msg.find('\n')
+        if index != -1 and index > 30:
+            m.send_email(TO1, msg[index+1:])
+        

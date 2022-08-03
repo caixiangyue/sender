@@ -24,5 +24,6 @@ jobs:
       env:
         SENDER: ${{ secrets.SENDER }}
         TO: ${{ secrets.TO }}
+        TO1: ${{ secrets.TO1 }}
         PASS_KEY: ${{ secrets.PASS_KEY }}
       run: python main.py
