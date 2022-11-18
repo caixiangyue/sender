@@ -16,6 +16,7 @@ if __name__ == "__main__":
     msg += w.get_weather_msg()
     msg += y.get_msg()
     msg += s.get_gnp()
+    msg += s.get_ten_years()
     p = os.popen('./cu -wb')
     msg += p.read()
     msg += g.get_trending_msg()
