@@ -5,6 +5,7 @@ from lxml import etree
 from common.utils import HEADERS
 
 URL = 'https://legulegu.com/stockdata/marketcap-gdp'
+URL1 = 'https://wallstreetcn.com/markets/codes/CN10YR.OTC'
 
 class Crawler:
     def __init__(self) -> None:
@@ -16,6 +17,7 @@ class Crawler:
             try:
                 r = requests.get(URL, headers=HEADERS)
                 if r.status_code != 200:
+                    retry_times -= 1
                     continue
                 break
             except Exception as e:
@@ -32,6 +34,34 @@ class Crawler:
             gnp = data[0]
         ret += f'{gnp}\n'
         ret += self.get_suggest(gnp)
+        ret += '-----------------------\n\n'
+        return ret
+
+    def get_ten_years(self):
+        retry_times = 10
+        while retry_times > 0:
+            try:
+                r = requests.get(URL1, headers=HEADERS)
+                if r.status_code != 200:
+                    retry_times -= 1
+                    continue
+                break
+            except Exception as e:
+                retry_times -= 1
+                print(e)
+                if retry_times == 0:
+                    return ''
+                time.sleep(1)
+
+        ret = '十年期国债：\n'
+        dom = etree.HTML(r.content)
+        data = dom.xpath('//*[@id="app"]/div/div[1]/div[2]/div/div[1]/div[1]/div/div[1]/div[1]/div[2]/div[1]/text()')
+        ten_rate=''
+        if len(data) > 0:
+            ten_rate = data[0].strip('\n').strip('\r').strip(' ')
+        ret += f'{ten_rate}\n'
+        if len(ret) > 0 and float(ten_rate) < 3.0:
+            ret += '此时债券及其没有性价比，不建议买入\n'
         ret += '-----------------------\n\n'
         return ret
     
@@ -59,5 +89,5 @@ class Crawler:
             return '此时适合定投，少量买入\n'
 
 
-# c = Crawler()
-# print(c.get_gnp())
+#c = Crawler()
+#print(c.get_ten_years())
