@@ -60,7 +60,7 @@ class Crawler:
         if len(data) > 0:
             ten_rate = data[0].strip('\n').strip('\r').strip(' ')
         ret += f'{ten_rate}\n'
-        if len(ret) > 0 and float(ten_rate) < 3.0:
+        if len(ret) > 0 and ret != '' and float(ten_rate) < 3.0:
             ret += '此时债券及其没有性价比，不建议买入\n'
         ret += '-----------------------\n\n'
         return ret
