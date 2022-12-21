@@ -16,6 +16,7 @@ if __name__ == "__main__":
     msg += w.get_weather_msg()
     msg += y.get_msg()
     msg += s.get_gnp()
+    msg += s.get_sh()
     msg += s.get_ten_years()
     p = os.popen('./cu -wb')
     msg += p.read()
@@ -26,4 +27,4 @@ if __name__ == "__main__":
         index = msg.find('\n')
         if index != -1 and index > 30:
             m.send_email(TO1, msg[index+1:])
-        
+

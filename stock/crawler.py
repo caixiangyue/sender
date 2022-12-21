@@ -3,10 +3,12 @@ import time
 from lxml import etree
 
 from common.utils import HEADERS
+# HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36"}
 HEADERS1 = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36", "Referer":"https://stock.finance.sina.com.cn/forex/globalbd/gcny10.html"}
 
 URL = 'https://legulegu.com/stockdata/marketcap-gdp'
 URL1 = 'https://hq.sinajs.cn/?rn=1670838672882&list=globalbd_gcny10'
+URL2 = 'https://stock.xueqiu.com/v5/stock/realtime/quotec.json?symbol=SH000001'
 
 class Crawler:
     def __init__(self) -> None:
@@ -34,7 +36,7 @@ class Crawler:
         if len(data) > 0:
             gnp = data[0]
         ret += f'{gnp}\n'
-        ret += self.get_suggest(gnp)
+        ret += self._get_suggest(gnp)
         ret += '-----------------------\n\n'
         return ret
 
@@ -66,7 +68,7 @@ class Crawler:
         ret += '-----------------------\n\n'
         return ret
 
-    def get_suggest(self, gnp: str) -> str:
+    def _get_suggest(self, gnp: str) -> str:
         start = gnp.find('：')
         end = gnp.find('%')
 
@@ -89,6 +91,30 @@ class Crawler:
         if gnp < 80.0:
             return '此时适合定投，少量买入\n'
 
+    def get_sh(self):
+        retry_times = 10
+        while retry_times > 0:
+            try:
+                r = requests.get(URL2, headers=HEADERS)
+                if r.status_code != 200:
+                    retry_times -= 1
+                    continue
+                break
+            except Exception as e:
+                retry_times -= 1
+                print(e)
+                if retry_times == 0:
+                    return ''
+                time.sleep(1)
+
+        ret = '上证指数：'
+
+        json_data = r.json()
+        data = json_data['data'][0]
+        ret += str(data['current'])
+        ret += '\n-----------------------\n\n'
+        return ret
+
 
 # c = Crawler()
-# print(c.get_ten_years())
+# print(c.get_sh())
