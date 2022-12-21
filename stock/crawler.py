@@ -8,7 +8,7 @@ HEADERS1 = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit
 
 URL = 'https://legulegu.com/stockdata/marketcap-gdp'
 URL1 = 'https://hq.sinajs.cn/?rn=1670838672882&list=globalbd_gcny10'
-URL2 = 'https://stock.xueqiu.com/v5/stock/realtime/quotec.json?symbol=SH000001'
+URL2 = 'https://stock.xueqiu.com/v5/stock/realtime/quotec.json?symbol=SH000001,.IXIC'
 
 class Crawler:
     def __init__(self) -> None:
@@ -108,9 +108,11 @@ class Crawler:
                 time.sleep(1)
 
         ret = '上证指数：'
-
         json_data = r.json()
         data = json_data['data'][0]
+        ret += str(data['current'])
+        ret += '\n纳斯达克指数：'
+        data = json_data['data'][1]
         ret += str(data['current'])
         ret += '\n-----------------------\n\n'
         return ret
