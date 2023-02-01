@@ -63,8 +63,10 @@ class Crawler:
         if len(data) > 3:
             ten_rate = data[3]
         ret += f'{ten_rate}\n'
-        if len(ten_rate) > 0 and float(ten_rate) < 3.0:
+        if len(ten_rate) > 0 and float(ten_rate) < 3.0 and float(ten_rate) > 2.7:
             ret += '此时债券及其没有性价比，不建议买入\n'
+        elif len(ten_rate) > 0 and float(ten_rate) < 2.7:
+            ret += '建议分批卖出债券\n'
         ret += '-----------------------\n\n'
         return ret
 
