@@ -47,7 +47,7 @@ class Crawler:
         time_min = dom.xpath('/html/body/div[1]/div[2]/div/div[2]/div[2]/div/span[2]/span[5]/text()')
         if len(time_min) > 0:
             ret += time_min[0]
-            ret += '分'
+            ret += '分\n\n'
         return ret
 
 # c = Crawler()
