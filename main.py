@@ -6,6 +6,7 @@ from github.crawler import Crawler as githubCrawler
 from stock.crawler import Crawler as stockCrawler
 from yiyan.crawler import Crawler as yiyanCrawler
 from date.commemoration import get_together_days_msg
+from date.crawler import Crawler as holidayCrawler
 
 if __name__ == "__main__":
     msg = get_together_days_msg()
@@ -13,6 +14,8 @@ if __name__ == "__main__":
     g = githubCrawler()
     s = stockCrawler()
     y = yiyanCrawler()
+    h = holidayCrawler()
+    msg += h.get_holiday_time()
     msg += w.get_weather_msg()
     msg += y.get_msg()
     msg += s.get_gnp()
