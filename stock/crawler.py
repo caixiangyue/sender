@@ -3,16 +3,70 @@ import time
 from lxml import etree
 
 from common.utils import HEADERS
-# HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36"}
+# HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"}
 HEADERS1 = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36", "Referer":"https://stock.finance.sina.com.cn/forex/globalbd/gcny10.html"}
 
 URL = 'https://legulegu.com/stockdata/marketcap-gdp'
 URL1 = 'https://hq.sinajs.cn/?rn=1670838672882&list=globalbd_gcny10'
 URL2 = 'https://stock.xueqiu.com/v5/stock/realtime/quotec.json?symbol=HKHSI,SH000001,.IXIC'
+URL3 = 'https://xueqiu.com'
+URL4 = 'https://stock.xueqiu.com/v5/stock/quote.json?symbol='
+ZSH = 'SH600028'
+NH = 'SH601288'
+DQTL = 'SH601006'
 
 class Crawler:
     def __init__(self) -> None:
         pass
+
+    def monitor(self):
+        retry_times = 3
+        while retry_times > 0:
+            try:
+                r = requests.get(URL3, headers=HEADERS)
+                if r.status_code != 200:
+                    print(r.status_code)
+                    retry_times -= 1
+                    continue
+                break
+            except Exception as e:
+                retry_times -= 1
+                print(e)
+                if retry_times == 0:
+                    return ''
+                time.sleep(1)
+        ret = '中国石化：'
+        ret += self._get_data_current(r.cookies, ZSH)
+        ret += '\n'
+        ret += '农业银行：'
+        ret += self._get_data_current(r.cookies, NH)
+        ret += '\n'
+        ret += '大秦铁路：'
+        ret += self._get_data_current(r.cookies, DQTL)
+        ret += '\n---------------\n'
+        return ret
+
+    def _get_data_current(self,cookies, code):
+        retry_times = 3
+        while retry_times > 0:
+            try:
+                r = requests.get(f'{URL4}{code}', headers=HEADERS, cookies=cookies)
+                if r.status_code != 200:
+                    print(r.status_code)
+                    retry_times -= 1
+                    continue
+                break
+            except Exception as e:
+                retry_times -= 1
+                print(e)
+                if retry_times == 0:
+                    return ''
+                time.sleep(1)
+        json_data = r.json()
+        if json_data is None:
+            return ''
+        return str(json_data['data']['quote']['current'])
+
 
     def get_gnp(self):
         retry_times = 3
@@ -124,4 +178,4 @@ class Crawler:
 
 
 # c = Crawler()
-# print(c.get_sh())
+# print(c.monitor())

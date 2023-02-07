@@ -20,6 +20,7 @@ if __name__ == "__main__":
     msg += y.get_msg()
     msg += s.get_gnp()
     msg += s.get_sh()
+    msg += s.monitor()
     msg += s.get_ten_years()
     p = os.popen('./cu -wb')
     msg += p.read()
