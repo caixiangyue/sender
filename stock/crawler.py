@@ -103,7 +103,7 @@ class Crawler:
         # ret += self._get_data_current(r.cookies, DQTL)
         # ret += '\n---------------\n'
         f = asyncio.run(get_all(r.cookies))
-        return f
+        return '\n'.join(f)
 
     def _get_data_current(self,cookies, code):
         retry_times = 3
