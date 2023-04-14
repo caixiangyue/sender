@@ -31,11 +31,11 @@ SXG = 'SH603896'
 YZGF = 'SH603886'
 ZZHL = 'SH000922'
 
-async def get_data_current(name, cookies, code):
+async def get_data_current(cookies, code):
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(f'{URL4}{code}', headers=HEADERS, cookies=cookies)
+                r = requests.get(f'{URL4}{code}&extend=detail', headers=HEADERS, cookies=cookies)
                 if r.status_code != 200:
                     print(r.status_code)
                     retry_times -= 1
@@ -50,44 +50,55 @@ async def get_data_current(name, cookies, code):
         json_data = r.json()
         if json_data is None:
             return ''
-        current = json_data['data']['quote']['current']
-        chg = json_data['data']['quote']['chg']
+        # print(json_data)
+        quote = json_data['data']['quote']
+        current = quote['current']
+        chg = quote['chg']
+        percent = quote['percent']
+        low52w = quote['low52w']
+        name = quote['name']
+        market_capital = quote['market_capital']
+        pb = quote.get('pb', '无')
         if chg >= 0.0:
             chg_str = f'📈{chg}'
         else:
             chg_str = f'📉{abs(chg)}'
-        wave = round((abs(chg) / current) * 100, 2)
-        wave_str = ''
-        if wave > 1.0:
-            if chg >= 0.0:
-                wave_str = f'，📈{str(wave)}个点'
-            else:
-                wave_str = f'，📉{str(wave)}个点'
+        percent_str = ''
+        if abs(percent) > 1.0:
+            percent_str = f'，{str(percent)}个点'
 
-        ret = f"{name}: {str(current)}，{chg_str}{wave_str}"
+        cheap_value = int(100-(abs(current-low52w)/current)*100)
+        if market_capital is None:
+            market_capital_str = ''
+        else:
+            market_capital = int(market_capital / 100000000)
+            market_capital_str = f'，市值{str(market_capital)}亿'
+
+
+        ret = f"{name}: {str(current)}，{chg_str}{percent_str}{market_capital_str}，最低{low52w}，pb{pb}，便宜度{str(cheap_value)}"
         print(ret)
         return ret
 
 async def get_all(cookie):
     f = await asyncio.gather(
-        get_data_current('伊利股份', cookie, YLGF),
-        get_data_current('海螺水泥', cookie, HLSN),
-        get_data_current('双汇发展', cookie, SHFZ),
-        get_data_current('农业银行', cookie, NH),
-        get_data_current('中国石化', cookie, ZSH),
-        get_data_current('大秦铁路', cookie, DQTL),
-        get_data_current('招商银行', cookie, ZSYH),
-        get_data_current('贵州茅台', cookie, GZMT),
-        get_data_current('腾讯控股', cookie, TXKG),
-        get_data_current('羚锐制药', cookie, LRZY),
-        get_data_current('甘李药业', cookie, GLYY),
-        get_data_current('长江电力', cookie, CJDL),
-        get_data_current('上海机场', cookie, SHJC),
-        get_data_current('元祖股份', cookie, YZGF),
-        get_data_current('雅戈尔', cookie, YGER),
-        get_data_current('唐山港', cookie, TSG),
-        get_data_current('寿仙谷', cookie, SXG),
-        get_data_current('中证红利', cookie, ZZHL),
+        get_data_current(cookie, YLGF),
+        get_data_current(cookie, HLSN),
+        get_data_current(cookie, SHFZ),
+        get_data_current(cookie, NH),
+        get_data_current(cookie, ZSH),
+        get_data_current(cookie, DQTL),
+        get_data_current(cookie, ZSYH),
+        get_data_current(cookie, GZMT),
+        get_data_current(cookie, TXKG),
+        get_data_current(cookie, LRZY),
+        get_data_current(cookie, GLYY),
+        get_data_current(cookie, CJDL),
+        get_data_current(cookie, SHJC),
+        get_data_current(cookie, YZGF),
+        get_data_current(cookie, YGER),
+        get_data_current(cookie, TSG),
+        get_data_current(cookie, SXG),
+        get_data_current(cookie, ZZHL),
     )
     return f
 class Crawler:
