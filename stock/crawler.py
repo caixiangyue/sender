@@ -48,7 +48,18 @@ async def get_data_current(name, cookies, code):
         json_data = r.json()
         if json_data is None:
             return ''
-        ret = f"{name}: {str(json_data['data']['quote']['current'])}"
+        current = json_data['data']['quote']['current']
+        chg = json_data['data']['quote']['chg']
+        if chg >= 0.0:
+            chg_str = f'📈{chg}'
+        else:
+            chg_str = f'📉{abs(chg)}'
+        wave = round((abs(chg) / current) * 100, 2)
+        wave_str = ''
+        if wave > 1.0:
+            wave_str = f'，波动{str(wave)}个点'
+
+        ret = f"{name}: {str(current)}，{chg_str}{wave_str}"
         print(ret)
         return ret
 
