@@ -16,6 +16,7 @@ def send_msg():
     msg += s.get_gnp()
     msg += s.get_sh()
     msg += s.monitor()
+    msg += '\n'
     msg += s.get_ten_years()
     p = os.popen('./cu -wb')
     msg += p.read()
