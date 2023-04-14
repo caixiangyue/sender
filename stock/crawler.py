@@ -29,6 +29,8 @@ SHJC = 'SH600009'
 GLYY = 'SH603087'
 SXG = 'SH603896'
 YZGF = 'SH603886'
+ZZHL = 'SH000922'
+
 async def get_data_current(name, cookies, code):
         retry_times = 3
         while retry_times > 0:
@@ -57,7 +59,10 @@ async def get_data_current(name, cookies, code):
         wave = round((abs(chg) / current) * 100, 2)
         wave_str = ''
         if wave > 1.0:
-            wave_str = f'，波动{str(wave)}个点'
+            if chg >= 0.0:
+                wave_str = f'，📈{str(wave)}个点'
+            else:
+                wave_str = f'，📉{str(wave)}个点'
 
         ret = f"{name}: {str(current)}，{chg_str}{wave_str}"
         print(ret)
@@ -82,6 +87,7 @@ async def get_all(cookie):
         get_data_current('雅戈尔', cookie, YGER),
         get_data_current('唐山港', cookie, TSG),
         get_data_current('寿仙谷', cookie, SXG),
+        get_data_current('中证红利', cookie, ZZHL),
     )
     return f
 class Crawler:
