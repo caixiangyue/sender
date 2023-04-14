@@ -1,15 +1,9 @@
 import os
-from mail.constant import SENDER, TO, TO1, SEND_KEY
-from mail.mail import make_mail
-from weather.crawler import Crawler as weatherCrawler
-from github.crawler import Crawler as githubCrawler
+import argparse
 from stock.crawler import Crawler as stockCrawler
-from yiyan.crawler import Crawler as yiyanCrawler
-from date.commemoration import get_together_days_msg
-from date.crawler import Crawler as holidayCrawler
-from wechat.wechat import Wechat
 
-if __name__ == "__main__":
+
+def send_msg():
     msg = get_together_days_msg()
     w = weatherCrawler()
     g = githubCrawler()
@@ -34,4 +28,24 @@ if __name__ == "__main__":
         index = msg.find('\n')
         if index != -1 and index > 30:
             m.send_email(TO1, msg[index+1:])
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='sender')
+    parser.add_argument('-g', action="store_true")
+    args = parser.parse_args()
+    if args.g:
+        s = stockCrawler()
+        s.monitor()
+    else:
+        from mail.mail import make_mail
+        from mail.constant import SENDER, TO, TO1, SEND_KEY
+        from weather.crawler import Crawler as weatherCrawler
+        from github.crawler import Crawler as githubCrawler
+        from stock.crawler import Crawler as stockCrawler
+        from yiyan.crawler import Crawler as yiyanCrawler
+        from date.commemoration import get_together_days_msg
+        from date.crawler import Crawler as holidayCrawler
+        from wechat.wechat import Wechat
+        send_msg()
+
 

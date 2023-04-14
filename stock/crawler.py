@@ -1,5 +1,6 @@
 import requests
 import time
+import asyncio
 from lxml import etree
 
 from common.utils import HEADERS
@@ -14,7 +15,64 @@ URL4 = 'https://stock.xueqiu.com/v5/stock/quote.json?symbol='
 ZSH = 'SH600028'
 NH = 'SH601288'
 DQTL = 'SH601006'
+YLGF = 'SH600887'
+HLSN = 'SH600585'
+SHFZ = 'SZ000895'
+ZSYH = 'SH600036'
+GZMT = 'SH600519'
+YGER = 'SH600177'
+TSG = 'SH601000'
+TXKG = '00700'
+LRZY = 'SH600285'
+CJDL = 'SH600900'
+SHJC = 'SH600009'
+GLYY = 'SH603087'
+SXG = 'SH603896'
+YZGF = 'SH603886'
+async def get_data_current(name, cookies, code):
+        retry_times = 3
+        while retry_times > 0:
+            try:
+                r = requests.get(f'{URL4}{code}', headers=HEADERS, cookies=cookies)
+                if r.status_code != 200:
+                    print(r.status_code)
+                    retry_times -= 1
+                    continue
+                break
+            except Exception as e:
+                retry_times -= 1
+                print(e)
+                if retry_times == 0:
+                    return ''
+                time.sleep(1)
+        json_data = r.json()
+        if json_data is None:
+            return ''
+        ret = f"{name}: {str(json_data['data']['quote']['current'])}"
+        print(ret)
+        return ret
 
+async def get_all(cookie):
+    f = await asyncio.gather(
+        get_data_current('伊利股份', cookie, YLGF),
+        get_data_current('海螺水泥', cookie, HLSN),
+        get_data_current('双汇发展', cookie, SHFZ),
+        get_data_current('农业银行', cookie, NH),
+        get_data_current('中国石化', cookie, ZSH),
+        get_data_current('大秦铁路', cookie, DQTL),
+        get_data_current('招商银行', cookie, ZSYH),
+        get_data_current('贵州茅台', cookie, GZMT),
+        get_data_current('腾讯控股', cookie, TXKG),
+        get_data_current('羚锐制药', cookie, LRZY),
+        get_data_current('甘李药业', cookie, GLYY),
+        get_data_current('长江电力', cookie, CJDL),
+        get_data_current('上海机场', cookie, SHJC),
+        get_data_current('元祖股份', cookie, YZGF),
+        get_data_current('雅戈尔', cookie, YGER),
+        get_data_current('唐山港', cookie, TSG),
+        get_data_current('寿仙谷', cookie, SXG),
+    )
+    return f
 class Crawler:
     def __init__(self) -> None:
         pass
@@ -35,16 +93,17 @@ class Crawler:
                 if retry_times == 0:
                     return ''
                 time.sleep(1)
-        ret = '中国石化：'
-        ret += self._get_data_current(r.cookies, ZSH)
-        ret += '\n'
-        ret += '农业银行：'
-        ret += self._get_data_current(r.cookies, NH)
-        ret += '\n'
-        ret += '大秦铁路：'
-        ret += self._get_data_current(r.cookies, DQTL)
-        ret += '\n---------------\n'
-        return ret
+        # ret = '中国石化：'
+        # ret += self._get_data_current(r.cookies, ZSH)
+        # ret += '\n'
+        # ret += '农业银行：'
+        # ret += self._get_data_current(r.cookies, NH)
+        # ret += '\n'
+        # ret += '大秦铁路：'
+        # ret += self._get_data_current(r.cookies, DQTL)
+        # ret += '\n---------------\n'
+        f = asyncio.run(get_all(r.cookies))
+        return f
 
     def _get_data_current(self,cookies, code):
         retry_times = 3
