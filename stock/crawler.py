@@ -30,6 +30,7 @@ GLYY = 'SH603087'
 SXG = 'SH603896'
 YZGF = 'SH603886'
 ZZHL = 'SH000922'
+SZJC = 'SZ000089'
 
 async def get_data_current(cookies, code):
         retry_times = 3
@@ -81,6 +82,7 @@ async def get_data_current(cookies, code):
 
 async def get_all(cookie):
     f = await asyncio.gather(
+        get_data_current(cookie, SZJC),
         get_data_current(cookie, YLGF),
         get_data_current(cookie, HLSN),
         get_data_current(cookie, SHFZ),
