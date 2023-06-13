@@ -1,34 +1,46 @@
 import os
 import argparse
 from stock.crawler import Crawler as stockCrawler
+from weather.crawler import Crawler as weatherCrawler
+from github.crawler import Crawler as githubCrawler
+from stock.crawler import Crawler as stockCrawler
+from yiyan.crawler import Crawler as yiyanCrawler
+from date.commemoration import get_together_days_msg
+from date.crawler import Crawler as holidayCrawler
+from wechat.wechat import Wechat
 
+def get_msg():
+    msg = get_together_days_msg()
+    w = weatherCrawler()
+    s = stockCrawler()
+    y = yiyanCrawler()
+    h = holidayCrawler()
+    msg += h.get_holiday_time()
+    # msg += w.get_weather_msg()
+    msg += y.get_msg()
+    msg += s.get_gnp()
+    msg += s.get_sh()
+    msg += '\n'
+    msg += s.get_ten_years()
+    return msg
 
 def send_msg():
     msg = get_together_days_msg()
-    w = weatherCrawler()
+    # w = weatherCrawler()
     g = githubCrawler()
     s = stockCrawler()
     y = yiyanCrawler()
     h = holidayCrawler()
     msg += h.get_holiday_time()
-    print('get holiday done')
-    msg += w.get_weather_msg()
-    print('get weather done')
+    # msg += w.get_weather_msg()
     msg += y.get_msg()
-    print('get yiyan done')
     msg += s.get_gnp()
-    print('get gnp done')
     msg += s.get_sh()
-    print('get sh done')
-    msg += s.monitor()
-    print('get monitor done')
     msg += '\n'
     msg += s.get_ten_years()
-    print('get ten years done')
-    # p = os.popen('./cu -wb')
-    # msg += p.read()
-    # msg += g.get_trending_msg()
-    # print('get weibo done')
+    p = os.popen('./cu -wb')
+    msg += p.read()
+    msg += g.get_trending_msg()
     wechat = Wechat('机器人', msg, SEND_KEY)
     wechat.send()
     with make_mail() as m:
@@ -43,18 +55,12 @@ if __name__ == "__main__":
     parser.add_argument('-g', action="store_true")
     args = parser.parse_args()
     if args.g:
+        print(get_msg())
         s = stockCrawler()
         s.monitor()
     else:
         from mail.mail import make_mail
         from mail.constant import SENDER, TO, TO1, SEND_KEY
-        from weather.crawler import Crawler as weatherCrawler
-        from github.crawler import Crawler as githubCrawler
-        from stock.crawler import Crawler as stockCrawler
-        from yiyan.crawler import Crawler as yiyanCrawler
-        from date.commemoration import get_together_days_msg
-        from date.crawler import Crawler as holidayCrawler
-        from wechat.wechat import Wechat
         send_msg()
 
 
