@@ -25,10 +25,10 @@ def send_msg():
     msg += '\n'
     msg += s.get_ten_years()
     print('get ten years done')
-    p = os.popen('./cu -wb')
-    msg += p.read()
-    msg += g.get_trending_msg()
-    print('get weibo done')
+    # p = os.popen('./cu -wb')
+    # msg += p.read()
+    # msg += g.get_trending_msg()
+    # print('get weibo done')
     wechat = Wechat('机器人', msg, SEND_KEY)
     wechat.send()
     with make_mail() as m:
