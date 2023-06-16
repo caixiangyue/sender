@@ -15,6 +15,7 @@ class Crawler:
             try:
                 r = requests.get(URL, headers=HEADERS)
                 if r.status_code != 200:
+                    retry_times -= 1
                     continue
                 break
             except Exception as e:
@@ -23,7 +24,7 @@ class Crawler:
                 if retry_times == 0:
                     return ''
                 time.sleep(1)
-            
+
         json_dict = r.json()
         ret = ''
         if 'hitokoto' in json_dict and 'from' in json_dict:

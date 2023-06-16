@@ -15,6 +15,7 @@ class Crawler:
             try:
                 r = requests.get(URL, headers=HEADERS)
                 if r.status_code != 200:
+                    retry_times -= 1
                     continue
                 break
             except Exception as e:
@@ -23,7 +24,7 @@ class Crawler:
                 if retry_times == 0:
                     return ''
                 time.sleep(1)
-            
+
         json_dict = r.json()
         json_data = json_dict['data']
         json_forecast = json_data['forecast']

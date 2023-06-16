@@ -16,6 +16,7 @@ class Crawler:
             try:
                 r = requests.get(URL, headers=HEADERS)
                 if r.status_code != 200:
+                    retry_times -= 1
                     continue
                 break
             except Exception as e:
