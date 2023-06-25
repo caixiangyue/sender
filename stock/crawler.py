@@ -30,8 +30,11 @@ GLYY = 'SH603087'
 SXG = 'SH603896'
 YZGF = 'SH603886'
 ZZHL = 'SH000922'
-SZJC = 'SZ000089'
-
+FAN = 'SZ002327'
+MDJT = 'SZ000333'
+XYYH = 'SH601166'
+GLDQ = 'SZ000651'
+SXMY = 'SH601225'
 async def get_data_current(cookies, code):
         retry_times = 3
         while retry_times > 0:
@@ -59,6 +62,7 @@ async def get_data_current(cookies, code):
         low52w = quote['low52w']
         name = quote['name']
         market_capital = quote['market_capital']
+        dividend_yield = quote.get('dividend_yield', '无')
         pb = quote.get('pb', '无')
         if chg >= 0.0:
             chg_str = f'📈{chg}'
@@ -76,13 +80,17 @@ async def get_data_current(cookies, code):
             market_capital_str = f'，市值{str(market_capital)}亿'
 
 
-        ret = f"{name}: {str(current)}，{chg_str}{percent_str}{market_capital_str}，最低{low52w}，pb{pb}，便宜度{str(cheap_value)}"
+        ret = f"{name}: {str(current)}，{chg_str}{percent_str}{market_capital_str}，最低{low52w}，pb{pb}，股息率{str(dividend_yield)}，便宜度{str(cheap_value)}"
         print(ret)
         return ret
 
 async def get_all(cookie):
     f = await asyncio.gather(
-        get_data_current(cookie, SZJC),
+        get_data_current(cookie, SXMY),
+        get_data_current(cookie, GLDQ),
+        get_data_current(cookie, XYYH),
+        get_data_current(cookie, MDJT),
+        get_data_current(cookie, FAN),
         get_data_current(cookie, YLGF),
         get_data_current(cookie, HLSN),
         get_data_current(cookie, SHFZ),
