@@ -38,6 +38,7 @@ def send_msg():
     msg += s.get_sh()
     msg += '\n'
     msg += s.get_ten_years()
+    msg += s.monitor()
     p = os.popen('./cu -wb')
     msg += p.read()
     msg += g.get_trending_msg()
