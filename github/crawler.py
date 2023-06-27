@@ -5,6 +5,7 @@ from lxml import etree
 from common.utils import HEADERS
 # HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"}
 URL = "https://github.com/trending"
+URL1 = 'https://github.com/ruanyf/weekly/blob/master/README.md'
 
 class Crawler:
     def __init__(self) -> None:
@@ -52,6 +53,30 @@ class Crawler:
         ret += '\n'
         return ret
 
+    def get_weekly(self):
+        retry_times = 3
+        while retry_times > 0:
+            try:
+                r = requests.get(URL1, headers=HEADERS)
+                if r.status_code != 200:
+                    retry_times -= 1
+                    continue
+                break
+            except Exception as e:
+                retry_times -= 1
+                print(e)
+                if retry_times == 0:
+                    return ''
+                time.sleep(1)
+
+        ret = ''
+        dom = etree.HTML(r.content)
+        res = dom.xpath('//*[@id="readme"]/article/ul[1]/li[1]/a')
+        if len(res) > 0:
+            title = res[0].xpath('./text()')[0]
+            href = res[0].xpath('./@href')[0]
+        ret += f'{title}: https://github.com{href}\n'
+        return ret
 
 
 # c = Crawler()

@@ -11,6 +11,7 @@ from wechat.wechat import Wechat
 
 def get_msg():
     msg = get_together_days_msg()
+    g = githubCrawler()
     w = weatherCrawler()
     s = stockCrawler()
     y = yiyanCrawler()
@@ -18,10 +19,12 @@ def get_msg():
     msg += h.get_holiday_time()
     msg += w.get_weather_msg()
     msg += y.get_msg()
+    msg += g.get_weekly()
     msg += s.get_gnp()
     msg += s.get_sh()
     msg += '\n'
     msg += s.get_ten_years()
+    msg += g.get_trending_msg()
     return msg
 
 def send_msg():
@@ -34,11 +37,12 @@ def send_msg():
     msg += h.get_holiday_time()
     msg += w.get_weather_msg()
     msg += y.get_msg()
+    msg += g.get_weekly()
     msg += s.get_gnp()
     msg += s.get_sh()
-    msg += '\n'
     msg += s.get_ten_years()
     msg += s.monitor()
+    msg += '\n'
     p = os.popen('./cu -wb')
     msg += p.read()
     msg += g.get_trending_msg()
