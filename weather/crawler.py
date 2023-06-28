@@ -26,7 +26,9 @@ class Crawler:
                 time.sleep(1)
 
         json_dict = r.json()
-        json_data = json_dict['data']
+        json_data = json_dict.get('data', None)
+        if json_data is None:
+            return ''
         json_forecast = json_data['forecast']
         ret = f'查询北京天气。。。\n'
         ret += f'{json_forecast[0]["week"]}\n'

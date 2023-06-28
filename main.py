@@ -19,12 +19,12 @@ def get_msg():
     msg += h.get_holiday_time()
     msg += w.get_weather_msg()
     msg += y.get_msg()
-    msg += g.get_weekly()
+    # msg += g.get_weekly()
     msg += s.get_gnp()
     msg += s.get_sh()
     msg += '\n'
     msg += s.get_ten_years()
-    msg += g.get_trending_msg()
+    # msg += g.get_trending_msg()
     return msg
 
 def send_msg():
