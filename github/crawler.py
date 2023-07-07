@@ -75,7 +75,7 @@ class Crawler:
         if len(res) > 0:
             title = res[0].xpath('./text()')[0]
             href = res[0].xpath('./@href')[0]
-        ret += f'{title}: https://github.com{href}\n'
+            ret += f'{title}: https://github.com{href}\n'
         return ret
 
 

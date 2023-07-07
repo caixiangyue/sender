@@ -36,6 +36,7 @@ XYYH = 'SH601166'
 GLDQ = 'SZ000651'
 SXMY = 'SH601225'
 ZGPA = 'SH601318'
+YNBY = 'SZ000538'
 
 async def get_data_current(cookies, code):
         retry_times = 3
@@ -88,6 +89,7 @@ async def get_data_current(cookies, code):
 
 async def get_all(cookie):
     f = await asyncio.gather(
+        get_data_current(cookie, YNBY),
         get_data_current(cookie, ZGPA),
         get_data_current(cookie, SXMY),
         get_data_current(cookie, GLDQ),
