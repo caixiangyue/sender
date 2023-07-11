@@ -16,15 +16,16 @@ def get_msg():
     s = stockCrawler()
     y = yiyanCrawler()
     h = holidayCrawler()
-    msg += h.get_holiday_time()
-    msg += w.get_weather_msg()
-    msg += y.get_msg()
+    # msg += h.get_holiday_time()
+    # msg += w.get_weather_msg()
+    # msg += y.get_msg()
     # msg += g.get_weekly()
-    msg += s.get_gnp()
-    msg += s.get_sh()
-    msg += '\n'
-    msg += s.get_ten_years()
+    # msg += s.get_gnp()
+    # msg += s.get_sh()
+    # msg += '\n'
+    # msg += s.get_ten_years()
     # msg += g.get_trending_msg()
+    msg += g.get_weekly()
     return msg
 
 def send_msg():
@@ -61,8 +62,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.g:
         print(get_msg())
-        s = stockCrawler()
-        s.monitor()
+        # s = stockCrawler()
+        # s.monitor()
     else:
         from mail.mail import make_mail
         from mail.constant import SENDER, TO, TO1, SEND_KEY

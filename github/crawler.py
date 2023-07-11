@@ -5,7 +5,7 @@ from lxml import etree
 from common.utils import HEADERS
 # HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"}
 URL = "https://github.com/trending"
-URL1 = 'https://github.com/ruanyf/weekly/blob/master/README.md'
+URL1 = 'https://github.com/ruanyf/weekly/tree/master/docs'
 
 class Crawler:
     def __init__(self) -> None:
@@ -70,12 +70,18 @@ class Crawler:
                 time.sleep(1)
 
         ret = ''
-        dom = etree.HTML(r.content)
-        res = dom.xpath('//*[@id="readme"]/article/ul[1]/li[1]/a')
-        if len(res) > 0:
-            title = res[0].xpath('./text()')[0]
-            href = res[0].xpath('./@href')[0]
-            ret += f'{title}: https://github.com{href}\n'
+        
+        jsons = r.json()
+        max_num = 0
+        if jsons:
+            items = jsons['payload']['tree']['items']
+            for item in items:
+                path = item['path']
+                # ''.lstrip
+                Num = path.rstrip('.md').lstrip('docs/issue-')
+                if Num[0] >= '0' and Num[0] <= '9':
+                    max_num = max(max_num, int(Num))
+        ret += f'周刊: https://github.com/ruanyf/weekly/blob/master/docs/issue-{max_num}.md\n'
         return ret
 
 
