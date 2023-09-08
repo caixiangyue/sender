@@ -61,9 +61,8 @@ if __name__ == "__main__":
     parser.add_argument('-g', action="store_true")
     args = parser.parse_args()
     if args.g:
-        print(get_msg())
-        # s = stockCrawler()
-        # s.monitor()
+        s = stockCrawler()
+        s.monitor()
     else:
         from mail.mail import make_mail
         from mail.constant import SENDER, TO, TO1, SEND_KEY

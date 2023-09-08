@@ -37,6 +37,8 @@ GLDQ = 'SZ000651'
 SXMY = 'SH601225'
 ZGPA = 'SH601318'
 YNBY = 'SZ000538'
+ZGC = 'SH508099'
+SZNY = 'SZ180401'
 
 async def get_data_current(cookies, code):
         retry_times = 3
@@ -89,6 +91,8 @@ async def get_data_current(cookies, code):
 
 async def get_all(cookie):
     f = await asyncio.gather(
+        get_data_current(cookie, ZGC),
+        get_data_current(cookie, SZNY),
         get_data_current(cookie, YNBY),
         get_data_current(cookie, ZGPA),
         get_data_current(cookie, SXMY),
@@ -97,7 +101,6 @@ async def get_all(cookie):
         get_data_current(cookie, MDJT),
         get_data_current(cookie, FAN),
         get_data_current(cookie, YLGF),
-        get_data_current(cookie, HLSN),
         get_data_current(cookie, SHFZ),
         get_data_current(cookie, NH),
         get_data_current(cookie, ZSH),
@@ -106,10 +109,8 @@ async def get_all(cookie):
         get_data_current(cookie, GZMT),
         get_data_current(cookie, TXKG),
         get_data_current(cookie, LRZY),
-        get_data_current(cookie, GLYY),
         get_data_current(cookie, CJDL),
         get_data_current(cookie, SHJC),
-        get_data_current(cookie, YZGF),
         get_data_current(cookie, YGER),
         get_data_current(cookie, TSG),
         get_data_current(cookie, SXG),
@@ -136,15 +137,6 @@ class Crawler:
                 if retry_times == 0:
                     return ''
                 time.sleep(1)
-        # ret = '中国石化：'
-        # ret += self._get_data_current(r.cookies, ZSH)
-        # ret += '\n'
-        # ret += '农业银行：'
-        # ret += self._get_data_current(r.cookies, NH)
-        # ret += '\n'
-        # ret += '大秦铁路：'
-        # ret += self._get_data_current(r.cookies, DQTL)
-        # ret += '\n---------------\n'
         f = asyncio.run(get_all(r.cookies))
         return '\n'.join(f)
 
