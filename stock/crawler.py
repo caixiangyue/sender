@@ -39,6 +39,7 @@ ZGPA = 'SH601318'
 YNBY = 'SZ000538'
 ZGC = 'SH508099'
 SZNY = 'SZ180401'
+HKHSHYLV = 'HKHSHYLV'
 
 async def get_data_current(cookies, code):
         retry_times = 3
@@ -99,7 +100,6 @@ async def get_all(cookie):
         get_data_current(cookie, GLDQ),
         get_data_current(cookie, XYYH),
         get_data_current(cookie, MDJT),
-        get_data_current(cookie, FAN),
         get_data_current(cookie, YLGF),
         get_data_current(cookie, SHFZ),
         get_data_current(cookie, NH),
@@ -115,6 +115,7 @@ async def get_all(cookie):
         get_data_current(cookie, TSG),
         get_data_current(cookie, SXG),
         get_data_current(cookie, ZZHL),
+        get_data_current(cookie, HKHSHYLV),
     )
     return f
 class Crawler:
