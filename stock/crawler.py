@@ -39,6 +39,7 @@ ZGPA = 'SH601318'
 YNBY = 'SZ000538'
 ZGC = 'SH508099'
 SZNY = 'SZ180401'
+SZZS = 'SH000001'
 HKHSHYLV = 'HKHSHYLV'
 
 async def get_data_current(cookies, code):
@@ -92,6 +93,7 @@ async def get_data_current(cookies, code):
 
 async def get_all(cookie):
     f = await asyncio.gather(
+        get_data_current(cookie, SZZS),
         get_data_current(cookie, ZGC),
         get_data_current(cookie, SZNY),
         get_data_current(cookie, YNBY),
