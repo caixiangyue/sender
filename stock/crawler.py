@@ -148,6 +148,7 @@ class Crawler:
                     print(r.status_code)
                     retry_times -= 1
                     continue
+                json_data = r.json()
                 break
             except Exception as e:
                 retry_times -= 1
@@ -155,7 +156,6 @@ class Crawler:
                 if retry_times == 0:
                     return ''
                 time.sleep(1)
-        json_data = r.json()
         if json_data is None:
             return ''
         return str(json_data['data']['quote']['current'])

@@ -1,6 +1,7 @@
 import requests
 import time
 from lxml import etree
+import json
 
 from common.utils import HEADERS
 # HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"}
@@ -70,18 +71,34 @@ class Crawler:
                 time.sleep(1)
 
         ret = ''
-        
-        jsons = r.json()
-        max_num = 0
-        if jsons:
-            items = jsons['payload']['tree']['items']
-            for item in items:
-                path = item['path']
-                # ''.lstrip
-                Num = path.rstrip('.md').lstrip('docs/issue-')
-                if Num[0] >= '0' and Num[0] <= '9':
-                    max_num = max(max_num, int(Num))
-        ret += f'周刊: https://github.com/ruanyf/weekly/blob/master/docs/issue-{max_num}.md\n'
+        try:
+            dom = etree.HTML(r.content)
+            tables = dom.xpath('//script/text()')
+            for t in tables:
+                json_data = json.loads(t.encode('utf8'))
+                payload = json_data.get('payload', None)
+                if payload:
+                    max_num = 0
+                    items = payload['tree']['items']
+                    for item in items:
+                        path = item['path']
+               
+                        Num = path.rstrip('.md').lstrip('docs/issue-')
+                        if Num[0] >= '0' and Num[0] <= '9':
+                            max_num = max(max_num, int(Num))
+                    ret += f'周刊: https://github.com/ruanyf/weekly/blob/master/docs/issue-{max_num}.md\n'
+        except Exception as e:
+            print(e)
+        # 
+        # if jsons:
+        #     items = jsons['payload']['tree']['items']
+        #     for item in items:
+        #         path = item['path']
+        #         # ''.lstrip
+        #         Num = path.rstrip('.md').lstrip('docs/issue-')
+        #         if Num[0] >= '0' and Num[0] <= '9':
+        #             max_num = max(max_num, int(Num))
+        # ret += f'周刊: https://github.com/ruanyf/weekly/blob/master/docs/issue-{max_num}.md\n'
         return ret
 
 
