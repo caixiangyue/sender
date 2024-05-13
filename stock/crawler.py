@@ -28,7 +28,6 @@ LRZY = 'SH600285'
 CJDL = 'SH600900'
 SHJC = 'SH600009'
 GLYY = 'SH603087'
-SXG = 'SH603896'
 YZGF = 'SH603886'
 ZZHL = 'SH000922'
 FAN = 'SZ002327'
@@ -40,7 +39,8 @@ ZGPA = 'SH601318'
 YNBY = 'SZ000538'
 SZZS = 'SH000001'
 HKHSHYLV = 'HKHSHYLV'
-
+BDH = 'SH600598'
+JHGT = 'SH601816'
 
 async def get_data_current(cookies, code):
     async with aiohttp.ClientSession() as session:
@@ -83,14 +83,12 @@ async def get_data_current(cookies, code):
 
 async def get_all(cookie):
     f = await asyncio.gather(
+        get_data_current(cookie, JHGT),
+        get_data_current(cookie, BDH),
         get_data_current(cookie, SZZS),
-        get_data_current(cookie, YNBY),
-        get_data_current(cookie, ZGPA),
         get_data_current(cookie, SXMY),
         get_data_current(cookie, GLDQ),
-        get_data_current(cookie, XYYH),
         get_data_current(cookie, MDJT),
-        get_data_current(cookie, YLGF),
         get_data_current(cookie, SHFZ),
         get_data_current(cookie, NH),
         get_data_current(cookie, ZSH),
@@ -101,9 +99,7 @@ async def get_all(cookie):
         get_data_current(cookie, LRZY),
         get_data_current(cookie, CJDL),
         get_data_current(cookie, SHJC),
-        get_data_current(cookie, YGER),
         get_data_current(cookie, TSG),
-        get_data_current(cookie, SXG),
         get_data_current(cookie, ZZHL),
         get_data_current(cookie, HKHSHYLV),
     )

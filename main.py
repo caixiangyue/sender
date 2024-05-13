@@ -52,9 +52,6 @@ def send_msg():
     with make_mail() as m:
         m.send_email(TO, msg)
         m.send_email(SENDER, msg)
-        index = msg.find('\n')
-        if index != -1 and index > 30:
-            m.send_email(TO1, msg[index+1:])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='sender')
