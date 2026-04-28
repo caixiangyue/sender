@@ -20,10 +20,11 @@ def get_msg():
     # msg += w.get_weather_msg()
     # msg += y.get_msg()
     # msg += g.get_weekly()
-    # msg += s.get_gnp()
-    # msg += s.get_sh()
+    msg += s.monitor() 
+    msg += s.get_gnp()
+    msg += s.get_sh()
     # msg += '\n'
-    # msg += s.get_ten_years()
+    msg += s.get_ten_years()
     # msg += g.get_trending_msg()
     msg += g.get_weekly()
     return msg
@@ -42,7 +43,7 @@ def send_msg():
     msg += s.get_gnp()
     msg += s.get_sh()
     msg += s.get_ten_years()
-    msg += s.monitor()
+    # msg += s.monitor()
     msg += '\n'
     p = os.popen('./cu -wb')
     msg += p.read()
@@ -58,9 +59,9 @@ if __name__ == "__main__":
     parser.add_argument('-g', action="store_true")
     args = parser.parse_args()
     if args.g:
-        s = stockCrawler()
-        s.monitor()
-        # print(get_msg())
+        # s = stockCrawler()
+        # print(s.monitor())
+        print(get_msg())
     else:
         from mail.mail import make_mail
         from mail.constant import SENDER, TO, TO1, SEND_KEY

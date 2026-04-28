@@ -44,13 +44,13 @@ JHGT = 'SH601816'
 
 async def get_data_current(cookies, code):
     async with aiohttp.ClientSession() as session:
-                async with session.get(f'{URL4}{code}&extend=detail', headers=HEADERS, cookies=cookies) as response:
-                    # html = await response.text()
-                    json_data = await response.json()
-                    # print(json_data)
+        async with session.get(f'{URL4}{code}&extend=detail', headers=HEADERS, cookies=cookies) as response:
+            # html = await response.text()
+            json_data = await response.json()
+            print(json_data)
     if json_data is None or json_data.get('data', None) == None:
-            return ''
-        # print(json_data)
+        return ''
+    print(json_data)
     quote = json_data['data']['quote']
     current = quote['current']
     chg = quote['chg']
