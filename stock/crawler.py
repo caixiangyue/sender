@@ -1,10 +1,16 @@
+import os
 import requests
 import time
 import asyncio
 import aiohttp
 from lxml import etree
+from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, timedelta
 
-from common.utils import HEADERS
+import akshare as ak
+
+from common.utils import HEADERS, REQUEST_TIMEOUT
 # HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"}
 HEADERS1 = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36", "Referer":"https://stock.finance.sina.com.cn/forex/globalbd/gcny10.html"}
 
@@ -41,6 +47,16 @@ SZZS = 'SH000001'
 HKHSHYLV = 'HKHSHYLV'
 BDH = 'SH600598'
 JHGT = 'SH601816'
+PROXY_ENV_KEYS = (
+    "http_proxy",
+    "https_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "all_proxy",
+    "ALL_PROXY",
+)
+AKSHARE_TIMEOUT = 8
+AKSHARE_MAX_WORKERS = 4
 
 async def get_data_current(cookies, code):
     async with aiohttp.ClientSession() as session:
@@ -108,11 +124,277 @@ class Crawler:
     def __init__(self) -> None:
         pass
 
+    @contextmanager
+    def _without_proxy(self):
+        old_env = {key: os.environ.get(key) for key in PROXY_ENV_KEYS}
+        try:
+            for key in PROXY_ENV_KEYS:
+                os.environ.pop(key, None)
+            yield
+        finally:
+            for key, value in old_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def _call_akshare(self, func, **kwargs):
+        with self._without_proxy():
+            return func(**kwargs)
+
+    def _normalize_stock_symbol(self, symbol: str) -> tuple[str, str]:
+        stock_symbol = symbol.strip().upper()
+        if not stock_symbol:
+            raise ValueError("股票代码不能为空")
+
+        if stock_symbol.startswith("SH") and stock_symbol[2:].isdigit():
+            if stock_symbol[2:].startswith("000"):
+                return "INDEX", stock_symbol
+            return "A", stock_symbol[2:]
+
+        if stock_symbol.startswith("SZ") and stock_symbol[2:].isdigit():
+            if stock_symbol[2:].startswith("399"):
+                return "INDEX", stock_symbol
+            return "A", stock_symbol[2:]
+
+        if stock_symbol.startswith("BJ") and stock_symbol[2:].isdigit():
+            return "A", stock_symbol[2:]
+
+        if stock_symbol.startswith("HK") and stock_symbol[2:].isdigit():
+            return "HK", stock_symbol[2:].zfill(5)
+
+        if stock_symbol.isdigit():
+            if len(stock_symbol) == 6:
+                return "A", stock_symbol
+            if len(stock_symbol) <= 5:
+                return "HK", stock_symbol.zfill(5)
+
+        if "." in stock_symbol and stock_symbol.split(".", 1)[0].isdigit():
+            return "US", stock_symbol.split(".", 1)[1]
+
+        if any(char.isalpha() for char in stock_symbol):
+            return "US", stock_symbol
+
+        raise ValueError(f"不支持的股票代码格式: {symbol}")
+
+    @staticmethod
+    def _find_first_value(dataframe, column: str):
+        if column not in dataframe.columns:
+            return None
+        series = dataframe[column].dropna()
+        if series.empty:
+            return None
+        return series.iloc[0]
+
+    @staticmethod
+    def _find_last_value(dataframe, column: str):
+        if column not in dataframe.columns:
+            return None
+        series = dataframe[column].dropna()
+        if series.empty:
+            return None
+        return series.iloc[-1]
+
+    @staticmethod
+    def _find_item_value(dataframe, item_name: str):
+        if dataframe.empty or "item" not in dataframe.columns or "value" not in dataframe.columns:
+            return None
+        row = dataframe[dataframe["item"] == item_name]
+        if row.empty:
+            return None
+        return row.iloc[0]["value"]
+
+    @staticmethod
+    def _to_float(value):
+        try:
+            if value is None or value == "":
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _to_xq_symbol(self, market: str, symbol: str) -> str:
+        if market == "INDEX":
+            return symbol
+        if market == "A":
+            if symbol.startswith(("4", "8")):
+                return f"BJ{symbol}"
+            if symbol.startswith(("6", "9")):
+                return f"SH{symbol}"
+            return f"SZ{symbol}"
+        return symbol
+
+    def _get_history_symbol(self, market: str, original_symbol: str, normalized_symbol: str) -> str:
+        if market == "INDEX":
+            return normalized_symbol[2:]
+        if market in {"A", "HK"}:
+            return normalized_symbol
+        stock_symbol = original_symbol.strip().upper()
+        if "." in stock_symbol and stock_symbol.split(".", 1)[0].isdigit():
+            return stock_symbol
+        return normalized_symbol
+
+    def _get_ten_year_price_stats(self, market: str, original_symbol: str, normalized_symbol: str) -> dict:
+        if market == "INDEX":
+            return {"ten_year_price_basis": None}
+
+        start_date = (date.today() - timedelta(days=3652)).strftime("%Y%m%d")
+        end_date = date.today().strftime("%Y%m%d")
+        hist_symbol = self._get_history_symbol(market, original_symbol, normalized_symbol)
+
+        if market == "A":
+            hist_df = self._call_akshare(
+                ak.stock_zh_a_hist,
+                symbol=hist_symbol,
+                period="monthly",
+                start_date=start_date,
+                end_date=end_date,
+                adjust="hfq",
+                timeout=AKSHARE_TIMEOUT,
+            )
+            price_basis = "hfq"
+        elif market == "HK":
+            hist_df = self._call_akshare(
+                ak.stock_hk_hist,
+                symbol=hist_symbol,
+                period="monthly",
+                start_date=start_date,
+                end_date=end_date,
+                adjust="hfq",
+            )
+            price_basis = "hfq"
+        else:
+            hist_df = self._call_akshare(
+                ak.stock_us_hist,
+                symbol=hist_symbol,
+                period="monthly",
+                start_date=start_date,
+                end_date=end_date,
+                adjust="hfq",
+            )
+            price_basis = "hfq"
+
+        if hist_df.empty or "收盘" not in hist_df.columns:
+            return {}
+
+        close_series = hist_df["收盘"].dropna()
+        if close_series.empty:
+            return {}
+
+        ten_year_low = float(close_series.min())
+        ten_year_high = float(close_series.max())
+        ten_year_current_price = float(close_series.iloc[-1])
+        return {
+            "ten_year_price_basis": price_basis,
+            "ten_year_low": ten_year_low,
+            "ten_year_high": ten_year_high,
+            "ten_year_current_price": ten_year_current_price,
+        }
+
+    def _get_stock_info_from_xq(self, market: str, original_symbol: str, normalized_symbol: str) -> dict:
+        xq_symbol = self._to_xq_symbol(market, normalized_symbol)
+        quote_df = self._call_akshare(
+            ak.stock_individual_spot_xq, symbol=xq_symbol, timeout=AKSHARE_TIMEOUT
+        )
+        name = self._find_item_value(quote_df, "名称")
+        price = self._to_float(self._find_item_value(quote_df, "现价"))
+        pb = self._to_float(self._find_item_value(quote_df, "市净率"))
+        dividend_yield = self._to_float(self._find_item_value(quote_df, "股息率(TTM)"))
+        ten_year_stats = self._get_ten_year_price_stats(market, original_symbol, normalized_symbol)
+        ten_year_price_basis = ten_year_stats.get("ten_year_price_basis")
+        ten_year_low = ten_year_stats.get("ten_year_low")
+        ten_year_high = ten_year_stats.get("ten_year_high")
+        ten_year_current_price = ten_year_stats.get("ten_year_current_price")
+        ten_year_percentile = None
+        if (
+            ten_year_current_price is not None
+            and ten_year_low is not None
+            and ten_year_high is not None
+            and ten_year_high > ten_year_low
+        ):
+            ten_year_percentile = round(
+                (
+                    (ten_year_current_price - ten_year_low)
+                    / (ten_year_high - ten_year_low)
+                )
+                * 100,
+                2,
+            )
+
+        return {
+            "market": market,
+            "symbol": normalized_symbol,
+            "name": name,
+            "price": price,
+            "pb": pb,
+            "dividend_yield": dividend_yield,
+            "ten_year_price_basis": ten_year_price_basis,
+            "ten_year_low": ten_year_low,
+            "ten_year_high": ten_year_high,
+            "ten_year_current_price": ten_year_current_price,
+            "ten_year_percentile": ten_year_percentile,
+        }
+
+    def _get_single_stock_info_safe(self, original_symbol: str, market: str, normalized_symbol: str) -> dict:
+        try:
+            return self._get_stock_info_from_xq(market, original_symbol, normalized_symbol)
+        except ValueError:
+            raise
+        except Exception as exc:
+            price_basis = "index" if market == "INDEX" else "hfq"
+            return {
+                "market": market,
+                "symbol": normalized_symbol,
+                "name": None,
+                "price": None,
+                "pb": None,
+                "dividend_yield": None,
+                "ten_year_price_basis": price_basis,
+                "ten_year_low": None,
+                "ten_year_high": None,
+                "ten_year_current_price": None,
+                "ten_year_percentile": None,
+                "error": f"{original_symbol} 查询失败: {exc.__class__.__name__}",
+            }
+
+    def get_stock_infos_akshare(self, symbols: list[str]) -> list[dict]:
+        normalized_items = []
+        for symbol in symbols:
+            market, normalized_symbol = self._normalize_stock_symbol(symbol)
+            normalized_items.append((symbol, market, normalized_symbol))
+
+        result = [None] * len(normalized_items)
+        with ThreadPoolExecutor(max_workers=min(AKSHARE_MAX_WORKERS, len(normalized_items) or 1)) as executor:
+            future_to_index = {
+                executor.submit(
+                    self._get_single_stock_info_safe,
+                    original_symbol,
+                    market,
+                    normalized_symbol,
+                ): index
+                for index, (original_symbol, market, normalized_symbol) in enumerate(normalized_items)
+            }
+            for future in as_completed(future_to_index):
+                index = future_to_index[future]
+                result[index] = future.result()
+        return result
+
+    def get_stock_info_akshare(self, symbol: str) -> dict:
+        """
+        使用 akshare 获取单只股票的基础信息。
+
+        支持的输入格式:
+        - A 股: 600519, SH600519, SZ000001
+        - 港股: 00700, HK00700
+        - 美股: AAPL, MSFT, 105.MSFT
+        """
+        return self.get_stock_infos_akshare([symbol])[0]
+
     def monitor(self):
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(URL3, headers=HEADERS)
+                r = requests.get(URL3, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 if r.status_code != 200:
                     print(r.status_code)
                     retry_times -= 1
@@ -131,7 +413,9 @@ class Crawler:
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(f'{URL4}{code}', headers=HEADERS, cookies=cookies)
+                r = requests.get(
+                    f'{URL4}{code}', headers=HEADERS, cookies=cookies, timeout=REQUEST_TIMEOUT
+                )
                 if r.status_code != 200:
                     print(r.status_code)
                     retry_times -= 1
@@ -153,7 +437,7 @@ class Crawler:
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(URL, headers=HEADERS)
+                r = requests.get(URL, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 if r.status_code != 200:
                     retry_times -= 1
                     continue
@@ -179,7 +463,7 @@ class Crawler:
         retry_times = 10
         while retry_times > 0:
             try:
-                r = requests.get(URL1, headers=HEADERS1)
+                r = requests.get(URL1, headers=HEADERS1, timeout=REQUEST_TIMEOUT)
                 if r.status_code != 200:
                     retry_times -= 1
                     continue
@@ -232,7 +516,7 @@ class Crawler:
         retry_times = 10
         while retry_times > 0:
             try:
-                r = requests.get(URL2, headers=HEADERS)
+                r = requests.get(URL2, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 if r.status_code != 200:
                     retry_times -= 1
                     continue

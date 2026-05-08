@@ -1,7 +1,7 @@
 import requests
 import time
 
-from common.utils import HEADERS
+from common.utils import HEADERS, REQUEST_TIMEOUT
 
 URL = 'http://t.weather.itboy.net/api/weather/city/101010100'
 
@@ -13,7 +13,7 @@ class Crawler:
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(URL, headers=HEADERS)
+                r = requests.get(URL, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 if r.status_code != 200:
                     retry_times -= 1
                     continue

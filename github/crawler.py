@@ -3,7 +3,7 @@ import time
 from lxml import etree
 import json
 
-from common.utils import HEADERS
+from common.utils import HEADERS, REQUEST_TIMEOUT
 # HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"}
 URL = "https://github.com/trending"
 URL1 = 'https://github.com/ruanyf/weekly/tree/master/docs'
@@ -16,7 +16,7 @@ class Crawler:
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(URL, headers=HEADERS)
+                r = requests.get(URL, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 if r.status_code != 200:
                     retry_times -= 1
                     continue
@@ -58,7 +58,7 @@ class Crawler:
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(URL1, headers=HEADERS)
+                r = requests.get(URL1, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 if r.status_code != 200:
                     retry_times -= 1
                     continue

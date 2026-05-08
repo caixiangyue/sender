@@ -2,7 +2,7 @@ import requests
 import time
 from lxml import etree
 
-from common.utils import HEADERS
+from common.utils import HEADERS, REQUEST_TIMEOUT
 # HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36"}
 
 URL = "https://www.daojishi321.com"
@@ -15,8 +15,9 @@ class Crawler:
         retry_times = 3
         while retry_times > 0:
             try:
-                r = requests.get(URL, headers=HEADERS)
+                r = requests.get(URL, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 if r.status_code != 200:
+                    retry_times -= 1
                     continue
                 break
             except Exception as e:
