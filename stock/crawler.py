@@ -4,7 +4,6 @@ import time
 import asyncio
 import aiohttp
 from lxml import etree
-from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 
@@ -47,14 +46,6 @@ SZZS = 'SH000001'
 HKHSHYLV = 'HKHSHYLV'
 BDH = 'SH600598'
 JHGT = 'SH601816'
-PROXY_ENV_KEYS = (
-    "http_proxy",
-    "https_proxy",
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "all_proxy",
-    "ALL_PROXY",
-)
 AKSHARE_TIMEOUT = 8
 AKSHARE_MAX_WORKERS = 4
 
@@ -122,25 +113,43 @@ async def get_all(cookie):
     return f
 class Crawler:
     def __init__(self) -> None:
-        pass
+        self._hk_spot_cache = None
 
-    @contextmanager
-    def _without_proxy(self):
-        old_env = {key: os.environ.get(key) for key in PROXY_ENV_KEYS}
-        try:
-            for key in PROXY_ENV_KEYS:
-                os.environ.pop(key, None)
-            yield
-        finally:
-            for key, value in old_env.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
+    @staticmethod
+    def _to_display_market(market: str):
+        return {
+            "A": "A股",
+            "HK": "港股",
+            "US": "美股",
+            "INDEX": "指数",
+        }.get(market, market)
+
+    @staticmethod
+    def _to_display_price_basis(price_basis: str | None):
+        return {
+            "hfq": "后复权",
+            "index": "指数点位",
+        }.get(price_basis, price_basis)
+
+    def _format_stock_info_output(self, data: dict) -> dict:
+        return {
+            "市场": self._to_display_market(data.get("market")),
+            "代码": data.get("symbol"),
+            "名称": data.get("name"),
+            "价格": data.get("price"),
+            "市净率": data.get("pb"),
+            "股息率": data.get("dividend_yield"),
+            "十年价格口径": self._to_display_price_basis(data.get("ten_year_price_basis")),
+            "十年最低价": data.get("ten_year_low"),
+            "十年最高价": data.get("ten_year_high"),
+            "十年当前价": data.get("ten_year_current_price"),
+            "十年分位": data.get("ten_year_percentile"),
+            "十年分位错误": data.get("ten_year_error"),
+            "错误": data.get("error"),
+        }
 
     def _call_akshare(self, func, **kwargs):
-        with self._without_proxy():
-            return func(**kwargs)
+        return func(**kwargs)
 
     def _normalize_stock_symbol(self, symbol: str) -> tuple[str, str]:
         stock_symbol = symbol.strip().upper()
@@ -213,6 +222,23 @@ class Crawler:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _extract_xq_token_from_cookie(cookie: str | None):
+        if not cookie:
+            return None
+        for item in cookie.split(";"):
+            key, sep, value = item.strip().partition("=")
+            if sep and key == "xq_a_token" and value:
+                return value
+        return None
+
+    def _get_xq_token(self):
+        return (
+            os.getenv("XQ_A_TOKEN")
+            or os.getenv("XUEQIU_A_TOKEN")
+            or self._extract_xq_token_from_cookie(os.getenv("XUEQIU_COOKIE"))
+        )
+
     def _to_xq_symbol(self, market: str, symbol: str) -> str:
         if market == "INDEX":
             return symbol
@@ -222,7 +248,69 @@ class Crawler:
             if symbol.startswith(("6", "9")):
                 return f"SH{symbol}"
             return f"SZ{symbol}"
+        if market == "HK":
+            return f"HK{symbol}"
         return symbol
+
+    def _get_hk_spot_cache(self):
+        if self._hk_spot_cache is None:
+            try:
+                self._hk_spot_cache = self._call_akshare(ak.stock_hk_spot)
+            except Exception:
+                self._hk_spot_cache = self._call_akshare(ak.stock_hk_spot_em)
+        return self._hk_spot_cache
+
+    def _get_stock_info_from_hk_spot(self, original_symbol: str, normalized_symbol: str) -> dict:
+        quote_df = self._get_hk_spot_cache()
+        if quote_df.empty or "代码" not in quote_df.columns:
+            raise ValueError(f"{original_symbol} 港股实时行情为空")
+        target_row = quote_df[quote_df["代码"].astype(str).str.zfill(5) == normalized_symbol]
+        if target_row.empty:
+            raise ValueError(f"{original_symbol} 未在港股实时行情中找到")
+        row = target_row.iloc[0]
+        name = row.get("名称")
+        if name is None:
+            name = row.get("中文名称")
+        price = row.get("最新价")
+        ten_year_error = None
+        try:
+            ten_year_stats = self._get_ten_year_price_stats("HK", original_symbol, normalized_symbol)
+        except Exception as exc:
+            ten_year_stats = {}
+            ten_year_error = f"{exc.__class__.__name__}: {exc}"
+        ten_year_price_basis = ten_year_stats.get("ten_year_price_basis")
+        ten_year_low = ten_year_stats.get("ten_year_low")
+        ten_year_high = ten_year_stats.get("ten_year_high")
+        ten_year_current_price = ten_year_stats.get("ten_year_current_price")
+        ten_year_percentile = None
+        if (
+            ten_year_current_price is not None
+            and ten_year_low is not None
+            and ten_year_high is not None
+            and ten_year_high > ten_year_low
+        ):
+            ten_year_percentile = round(
+                (
+                    (ten_year_current_price - ten_year_low)
+                    / (ten_year_high - ten_year_low)
+                )
+                * 100,
+                2,
+            )
+        return self._format_stock_info_output({
+            "market": "HK",
+            "symbol": normalized_symbol,
+            "name": name,
+            "price": self._to_float(price),
+            "pb": None,
+            "dividend_yield": None,
+            "ten_year_price_basis": ten_year_price_basis,
+            "ten_year_low": ten_year_low,
+            "ten_year_high": ten_year_high,
+            "ten_year_current_price": ten_year_current_price,
+            "ten_year_percentile": ten_year_percentile,
+            "ten_year_error": ten_year_error,
+        })
 
     def _get_history_symbol(self, market: str, original_symbol: str, normalized_symbol: str) -> str:
         if market == "INDEX":
@@ -234,53 +322,10 @@ class Crawler:
             return stock_symbol
         return normalized_symbol
 
-    def _get_ten_year_price_stats(self, market: str, original_symbol: str, normalized_symbol: str) -> dict:
-        if market == "INDEX":
-            return {"ten_year_price_basis": None}
-
-        start_date = (date.today() - timedelta(days=3652)).strftime("%Y%m%d")
-        end_date = date.today().strftime("%Y%m%d")
-        hist_symbol = self._get_history_symbol(market, original_symbol, normalized_symbol)
-
-        if market == "A":
-            hist_df = self._call_akshare(
-                ak.stock_zh_a_hist,
-                symbol=hist_symbol,
-                period="monthly",
-                start_date=start_date,
-                end_date=end_date,
-                adjust="hfq",
-                timeout=AKSHARE_TIMEOUT,
-            )
-            price_basis = "hfq"
-        elif market == "HK":
-            hist_df = self._call_akshare(
-                ak.stock_hk_hist,
-                symbol=hist_symbol,
-                period="monthly",
-                start_date=start_date,
-                end_date=end_date,
-                adjust="hfq",
-            )
-            price_basis = "hfq"
-        else:
-            hist_df = self._call_akshare(
-                ak.stock_us_hist,
-                symbol=hist_symbol,
-                period="monthly",
-                start_date=start_date,
-                end_date=end_date,
-                adjust="hfq",
-            )
-            price_basis = "hfq"
-
-        if hist_df.empty or "收盘" not in hist_df.columns:
-            return {}
-
-        close_series = hist_df["收盘"].dropna()
+    @staticmethod
+    def _build_ten_year_stats_from_close_series(close_series, price_basis: str) -> dict:
         if close_series.empty:
             return {}
-
         ten_year_low = float(close_series.min())
         ten_year_high = float(close_series.max())
         ten_year_current_price = float(close_series.iloc[-1])
@@ -291,16 +336,117 @@ class Crawler:
             "ten_year_current_price": ten_year_current_price,
         }
 
+    def _get_a_history_stats_from_tx(self, normalized_symbol: str, start_date: str, end_date: str) -> dict:
+        tx_symbol = self._to_xq_symbol("A", normalized_symbol).lower()
+        hist_df = self._call_akshare(
+            ak.stock_zh_a_hist_tx,
+            symbol=tx_symbol,
+            start_date=start_date,
+            end_date=end_date,
+            adjust="hfq",
+            timeout=AKSHARE_TIMEOUT,
+        )
+        if hist_df.empty or "close" not in hist_df.columns:
+            return {}
+        close_series = hist_df["close"].dropna()
+        return self._build_ten_year_stats_from_close_series(close_series, "hfq")
+
+    def _get_hk_history_stats_from_sina(self, normalized_symbol: str, start_date: str, end_date: str) -> dict:
+        hist_df = self._call_akshare(
+            ak.stock_hk_daily,
+            symbol=normalized_symbol,
+            adjust="hfq",
+        )
+        if hist_df.empty or "close" not in hist_df.columns:
+            return {}
+        hist_df = hist_df.copy()
+        if "date" in hist_df.columns:
+            hist_df["date"] = hist_df["date"].astype(str).str.replace("-", "", regex=False)
+            hist_df = hist_df[(hist_df["date"] >= start_date) & (hist_df["date"] <= end_date)]
+        close_series = hist_df["close"].dropna()
+        return self._build_ten_year_stats_from_close_series(close_series, "hfq")
+
+    def _get_ten_year_price_stats(self, market: str, original_symbol: str, normalized_symbol: str) -> dict:
+        if market == "INDEX":
+            return {"ten_year_price_basis": None}
+
+        start_date = (date.today() - timedelta(days=3652)).strftime("%Y%m%d")
+        end_date = date.today().strftime("%Y%m%d")
+        hist_symbol = self._get_history_symbol(market, original_symbol, normalized_symbol)
+
+        if market == "A":
+            try:
+                hist_df = self._call_akshare(
+                    ak.stock_zh_a_hist,
+                    symbol=hist_symbol,
+                    period="monthly",
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="hfq",
+                    timeout=AKSHARE_TIMEOUT,
+                )
+                if hist_df.empty or "收盘" not in hist_df.columns:
+                    return self._get_a_history_stats_from_tx(normalized_symbol, start_date, end_date)
+                close_series = hist_df["收盘"].dropna()
+                return self._build_ten_year_stats_from_close_series(close_series, "hfq")
+            except Exception as em_exc:
+                try:
+                    return self._get_a_history_stats_from_tx(normalized_symbol, start_date, end_date)
+                except Exception as tx_exc:
+                    raise ConnectionError(f"em={em_exc}; tx={tx_exc}") from tx_exc
+        elif market == "HK":
+            try:
+                hist_df = self._call_akshare(
+                    ak.stock_hk_hist,
+                    symbol=hist_symbol,
+                    period="monthly",
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="hfq",
+                )
+                if hist_df.empty or "收盘" not in hist_df.columns:
+                    return self._get_hk_history_stats_from_sina(normalized_symbol, start_date, end_date)
+            except Exception as em_exc:
+                try:
+                    return self._get_hk_history_stats_from_sina(normalized_symbol, start_date, end_date)
+                except Exception as sina_exc:
+                    raise ConnectionError(f"em={em_exc}; sina={sina_exc}") from sina_exc
+        else:
+            hist_df = self._call_akshare(
+                ak.stock_us_hist,
+                symbol=hist_symbol,
+                period="monthly",
+                start_date=start_date,
+                end_date=end_date,
+                adjust="hfq",
+            )
+        price_basis = "hfq"
+
+        if hist_df.empty or "收盘" not in hist_df.columns:
+            return {}
+
+        close_series = hist_df["收盘"].dropna()
+        return self._build_ten_year_stats_from_close_series(close_series, price_basis)
+
     def _get_stock_info_from_xq(self, market: str, original_symbol: str, normalized_symbol: str) -> dict:
         xq_symbol = self._to_xq_symbol(market, normalized_symbol)
+        token = self._get_xq_token()
         quote_df = self._call_akshare(
-            ak.stock_individual_spot_xq, symbol=xq_symbol, timeout=AKSHARE_TIMEOUT
+            ak.stock_individual_spot_xq,
+            symbol=xq_symbol,
+            token=token,
+            timeout=AKSHARE_TIMEOUT,
         )
         name = self._find_item_value(quote_df, "名称")
         price = self._to_float(self._find_item_value(quote_df, "现价"))
         pb = self._to_float(self._find_item_value(quote_df, "市净率"))
         dividend_yield = self._to_float(self._find_item_value(quote_df, "股息率(TTM)"))
-        ten_year_stats = self._get_ten_year_price_stats(market, original_symbol, normalized_symbol)
+        ten_year_error = None
+        try:
+            ten_year_stats = self._get_ten_year_price_stats(market, original_symbol, normalized_symbol)
+        except Exception as exc:
+            ten_year_stats = {}
+            ten_year_error = f"{exc.__class__.__name__}: {exc}"
         ten_year_price_basis = ten_year_stats.get("ten_year_price_basis")
         ten_year_low = ten_year_stats.get("ten_year_low")
         ten_year_high = ten_year_stats.get("ten_year_high")
@@ -321,7 +467,7 @@ class Crawler:
                 2,
             )
 
-        return {
+        return self._format_stock_info_output({
             "market": market,
             "symbol": normalized_symbol,
             "name": name,
@@ -333,16 +479,19 @@ class Crawler:
             "ten_year_high": ten_year_high,
             "ten_year_current_price": ten_year_current_price,
             "ten_year_percentile": ten_year_percentile,
-        }
+            "ten_year_error": ten_year_error,
+        })
 
     def _get_single_stock_info_safe(self, original_symbol: str, market: str, normalized_symbol: str) -> dict:
         try:
+            if market == "HK":
+                return self._get_stock_info_from_hk_spot(original_symbol, normalized_symbol)
             return self._get_stock_info_from_xq(market, original_symbol, normalized_symbol)
         except ValueError:
             raise
         except Exception as exc:
             price_basis = "index" if market == "INDEX" else "hfq"
-            return {
+            return self._format_stock_info_output({
                 "market": market,
                 "symbol": normalized_symbol,
                 "name": None,
@@ -354,29 +503,52 @@ class Crawler:
                 "ten_year_high": None,
                 "ten_year_current_price": None,
                 "ten_year_percentile": None,
-                "error": f"{original_symbol} 查询失败: {exc.__class__.__name__}",
-            }
+                "ten_year_error": None,
+                "error": f"{original_symbol} 查询失败: {exc.__class__.__name__}: {exc}",
+            })
 
     def get_stock_infos_akshare(self, symbols: list[str]) -> list[dict]:
         normalized_items = []
         for symbol in symbols:
             market, normalized_symbol = self._normalize_stock_symbol(symbol)
             normalized_items.append((symbol, market, normalized_symbol))
+        if any(market == "HK" for _, market, _ in normalized_items):
+            try:
+                self._get_hk_spot_cache()
+            except Exception:
+                pass
 
         result = [None] * len(normalized_items)
-        with ThreadPoolExecutor(max_workers=min(AKSHARE_MAX_WORKERS, len(normalized_items) or 1)) as executor:
-            future_to_index = {
-                executor.submit(
-                    self._get_single_stock_info_safe,
-                    original_symbol,
-                    market,
-                    normalized_symbol,
-                ): index
-                for index, (original_symbol, market, normalized_symbol) in enumerate(normalized_items)
-            }
-            for future in as_completed(future_to_index):
-                index = future_to_index[future]
-                result[index] = future.result()
+        parallel_items = []
+        serial_items = []
+        for index, item in enumerate(normalized_items):
+            if item[1] == "HK":
+                serial_items.append((index, item))
+            else:
+                parallel_items.append((index, item))
+
+        if parallel_items:
+            max_workers = min(AKSHARE_MAX_WORKERS, len(parallel_items))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_index = {
+                    executor.submit(
+                        self._get_single_stock_info_safe,
+                        original_symbol,
+                        market,
+                        normalized_symbol,
+                    ): index
+                    for index, (original_symbol, market, normalized_symbol) in parallel_items
+                }
+                for future in as_completed(future_to_index):
+                    index = future_to_index[future]
+                    result[index] = future.result()
+
+        for index, (original_symbol, market, normalized_symbol) in serial_items:
+            result[index] = self._get_single_stock_info_safe(
+                original_symbol,
+                market,
+                normalized_symbol,
+            )
         return result
 
     def get_stock_info_akshare(self, symbol: str) -> dict:
