@@ -12,6 +12,10 @@ import akshare as ak
 from common.utils import HEADERS, REQUEST_TIMEOUT
 # HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"}
 HEADERS1 = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36", "Referer":"https://stock.finance.sina.com.cn/forex/globalbd/gcny10.html"}
+DANJUAN_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    "Referer": "https://danjuanfunds.com/rn/value-center",
+}
 
 URL = 'https://legulegu.com/stockdata/marketcap-gdp'
 URL1 = 'https://hq.sinajs.cn/?rn=1670838672882&list=globalbd_gcny10'
@@ -132,21 +136,41 @@ class Crawler:
         }.get(price_basis, price_basis)
 
     def _format_stock_info_output(self, data: dict) -> dict:
-        return {
+        result = {
             "市场": self._to_display_market(data.get("market")),
-            "代码": data.get("symbol"),
+            "代码": data.get("display_symbol") or data.get("symbol"),
             "名称": data.get("name"),
             "价格": data.get("price"),
             "市净率": data.get("pb"),
             "股息率": data.get("dividend_yield"),
-            "十年价格口径": self._to_display_price_basis(data.get("ten_year_price_basis")),
-            "十年最低价": data.get("ten_year_low"),
-            "十年最高价": data.get("ten_year_high"),
-            "十年当前价": data.get("ten_year_current_price"),
-            "十年分位": data.get("ten_year_percentile"),
-            "十年分位错误": data.get("ten_year_error"),
             "错误": data.get("error"),
         }
+        if data.get("market") != "INDEX":
+            result.update(
+                {
+                    "十年价格口径": self._to_display_price_basis(data.get("ten_year_price_basis")),
+                    "十年最低价": data.get("ten_year_low"),
+                    "十年最高价": data.get("ten_year_high"),
+                    "十年当前价": data.get("ten_year_current_price"),
+                    "十年分位": data.get("ten_year_percentile"),
+                    "十年分位错误": data.get("ten_year_error"),
+                }
+            )
+        if data.get("market") == "INDEX":
+            result.update(
+                {
+                    "蛋卷市盈率": data.get("danjuan_pe"),
+                    "蛋卷市净率": data.get("danjuan_pb"),
+                    "蛋卷市盈率分位": data.get("danjuan_pe_percentile"),
+                    "蛋卷市净率分位": data.get("danjuan_pb_percentile"),
+                    "蛋卷股息率": data.get("danjuan_dividend_yield"),
+                    "蛋卷ROE": data.get("danjuan_roe"),
+                    "蛋卷估值判断": data.get("danjuan_eva_type"),
+                    "蛋卷更新时间": data.get("danjuan_update_time"),
+                    "蛋卷估值错误": data.get("danjuan_error"),
+                }
+            )
+        return result
 
     def _call_akshare(self, func, **kwargs):
         return func(**kwargs)
@@ -155,6 +179,17 @@ class Crawler:
         stock_symbol = symbol.strip().upper()
         if not stock_symbol:
             raise ValueError("股票代码不能为空")
+
+        us_index_aliases = {
+            "SP500": ".INX",
+            "S&P500": ".INX",
+            "NASDAQ": ".IXIC",
+            "IXIC": ".IXIC",
+            "DJIA": ".DJI",
+            "DJI": ".DJI",
+        }
+        if stock_symbol in us_index_aliases:
+            return "INDEX", us_index_aliases[stock_symbol]
 
         if stock_symbol.startswith("SH") and stock_symbol[2:].isdigit():
             if stock_symbol[2:].startswith("000"):
@@ -168,6 +203,9 @@ class Crawler:
 
         if stock_symbol.startswith("BJ") and stock_symbol[2:].isdigit():
             return "A", stock_symbol[2:]
+
+        if stock_symbol.startswith("HK") and not stock_symbol[2:].isdigit():
+            return "INDEX", stock_symbol
 
         if stock_symbol.startswith("HK") and stock_symbol[2:].isdigit():
             return "HK", stock_symbol[2:].zfill(5)
@@ -239,6 +277,13 @@ class Crawler:
             or self._extract_xq_token_from_cookie(os.getenv("XUEQIU_COOKIE"))
         )
 
+    @staticmethod
+    def _get_danjuan_index_code(original_symbol: str, normalized_symbol: str) -> str:
+        stock_symbol = original_symbol.strip().upper()
+        if stock_symbol in {"SP500", "S&P500", "NASDAQ", "IXIC", "DJIA", "DJI"}:
+            return stock_symbol
+        return normalized_symbol
+
     def _to_xq_symbol(self, market: str, symbol: str) -> str:
         if market == "INDEX":
             return symbol
@@ -299,6 +344,7 @@ class Crawler:
             )
         return self._format_stock_info_output({
             "market": "HK",
+            "display_symbol": original_symbol.strip().upper(),
             "symbol": normalized_symbol,
             "name": name,
             "price": self._to_float(price),
@@ -365,6 +411,35 @@ class Crawler:
             hist_df = hist_df[(hist_df["date"] >= start_date) & (hist_df["date"] <= end_date)]
         close_series = hist_df["close"].dropna()
         return self._build_ten_year_stats_from_close_series(close_series, "hfq")
+
+    def _get_danjuan_index_valuation(self, danjuan_symbol: str) -> dict:
+        response = requests.get(
+            f"https://danjuanfunds.com/djapi/index_eva/detail/{danjuan_symbol}",
+            headers=DANJUAN_HEADERS,
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise ValueError(f"{danjuan_symbol} 不在蛋卷估值覆盖范围内")
+        timestamp = data.get("ts")
+        update_time = None
+        if timestamp:
+            try:
+                update_time = time.strftime("%Y-%m-%d", time.localtime(timestamp / 1000))
+            except (TypeError, ValueError, OSError):
+                update_time = None
+        return {
+            "danjuan_pe": self._to_float(data.get("pe")),
+            "danjuan_pb": self._to_float(data.get("pb")),
+            "danjuan_pe_percentile": self._to_float(data.get("pe_percentile")),
+            "danjuan_pb_percentile": self._to_float(data.get("pb_percentile")),
+            "danjuan_dividend_yield": self._to_float(data.get("yeild")),
+            "danjuan_roe": self._to_float(data.get("roe")),
+            "danjuan_eva_type": data.get("eva_type"),
+            "danjuan_update_time": update_time,
+        }
 
     def _get_ten_year_price_stats(self, market: str, original_symbol: str, normalized_symbol: str) -> dict:
         if market == "INDEX":
@@ -451,6 +526,14 @@ class Crawler:
         ten_year_low = ten_year_stats.get("ten_year_low")
         ten_year_high = ten_year_stats.get("ten_year_high")
         ten_year_current_price = ten_year_stats.get("ten_year_current_price")
+        danjuan_data = {}
+        danjuan_error = None
+        if market == "INDEX":
+            try:
+                danjuan_symbol = self._get_danjuan_index_code(original_symbol, normalized_symbol)
+                danjuan_data = self._get_danjuan_index_valuation(danjuan_symbol)
+            except Exception as exc:
+                danjuan_error = f"{exc.__class__.__name__}: {exc}"
         ten_year_percentile = None
         if (
             ten_year_current_price is not None
@@ -469,6 +552,7 @@ class Crawler:
 
         return self._format_stock_info_output({
             "market": market,
+            "display_symbol": original_symbol.strip().upper(),
             "symbol": normalized_symbol,
             "name": name,
             "price": price,
@@ -480,6 +564,15 @@ class Crawler:
             "ten_year_current_price": ten_year_current_price,
             "ten_year_percentile": ten_year_percentile,
             "ten_year_error": ten_year_error,
+            "danjuan_pe": danjuan_data.get("danjuan_pe"),
+            "danjuan_pb": danjuan_data.get("danjuan_pb"),
+            "danjuan_pe_percentile": danjuan_data.get("danjuan_pe_percentile"),
+            "danjuan_pb_percentile": danjuan_data.get("danjuan_pb_percentile"),
+            "danjuan_dividend_yield": danjuan_data.get("danjuan_dividend_yield"),
+            "danjuan_roe": danjuan_data.get("danjuan_roe"),
+            "danjuan_eva_type": danjuan_data.get("danjuan_eva_type"),
+            "danjuan_update_time": danjuan_data.get("danjuan_update_time"),
+            "danjuan_error": danjuan_error,
         })
 
     def _get_single_stock_info_safe(self, original_symbol: str, market: str, normalized_symbol: str) -> dict:
@@ -493,6 +586,7 @@ class Crawler:
             price_basis = "index" if market == "INDEX" else "hfq"
             return self._format_stock_info_output({
                 "market": market,
+                "display_symbol": original_symbol.strip().upper(),
                 "symbol": normalized_symbol,
                 "name": None,
                 "price": None,
@@ -504,6 +598,15 @@ class Crawler:
                 "ten_year_current_price": None,
                 "ten_year_percentile": None,
                 "ten_year_error": None,
+                "danjuan_pe": None,
+                "danjuan_pb": None,
+                "danjuan_pe_percentile": None,
+                "danjuan_pb_percentile": None,
+                "danjuan_dividend_yield": None,
+                "danjuan_roe": None,
+                "danjuan_eva_type": None,
+                "danjuan_update_time": None,
+                "danjuan_error": None,
                 "error": f"{original_symbol} 查询失败: {exc.__class__.__name__}: {exc}",
             })
 
