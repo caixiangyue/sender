@@ -16,6 +16,11 @@ DANJUAN_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
     "Referer": "https://danjuanfunds.com/rn/value-center",
 }
+XQ_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+    "Referer": "https://xueqiu.com/",
+}
 
 URL = 'https://legulegu.com/stockdata/marketcap-gdp'
 URL1 = 'https://hq.sinajs.cn/?rn=1670838672882&list=globalbd_gcny10'
@@ -118,6 +123,12 @@ async def get_all(cookie):
 class Crawler:
     def __init__(self) -> None:
         self._hk_spot_cache = None
+        self._a_spot_cache = None
+        self._a_sina_spot_cache = None
+        self._etf_spot_cache = None
+        self._zh_index_spot_cache = None
+        self._hk_index_spot_cache = None
+        self._global_index_spot_cache = None
 
     @staticmethod
     def _to_display_market(market: str):
@@ -261,6 +272,12 @@ class Crawler:
             return None
 
     @staticmethod
+    def _normalize_code_text(value) -> str:
+        if value is None:
+            return ""
+        return str(value).strip().upper()
+
+    @staticmethod
     def _extract_xq_token_from_cookie(cookie: str | None):
         if not cookie:
             return None
@@ -276,6 +293,75 @@ class Crawler:
             or os.getenv("XUEQIU_A_TOKEN")
             or self._extract_xq_token_from_cookie(os.getenv("XUEQIU_COOKIE"))
         )
+
+    @staticmethod
+    def _truncate_text(value, limit: int = 120) -> str:
+        text = str(value).strip()
+        if len(text) <= limit:
+            return text
+        return f"{text[:limit]}..."
+
+    @staticmethod
+    def _extract_xq_quote(payload: dict) -> dict | None:
+        if not isinstance(payload, dict):
+            return None
+
+        data = payload.get("data")
+        if isinstance(data, dict):
+            quote = data.get("quote")
+            if isinstance(quote, dict):
+                return quote
+            if "current" in data or "symbol" in data:
+                return data
+
+        quote = payload.get("quote")
+        if isinstance(quote, dict):
+            return quote
+
+        if "current" in payload or "symbol" in payload:
+            return payload
+        return None
+
+    def _describe_xq_payload(self, payload) -> str:
+        if not isinstance(payload, dict):
+            return "雪球响应不是 JSON 对象"
+
+        for key in ("error_description", "error_message", "message", "msg", "error"):
+            value = payload.get(key)
+            if value:
+                return self._truncate_text(value)
+
+        error_code = payload.get("error_code") or payload.get("code")
+        top_level_keys = ",".join(sorted(payload.keys())[:8]) or "empty"
+        if error_code is not None:
+            return f"error_code={error_code}, keys={top_level_keys}"
+        return f"unexpected keys={top_level_keys}"
+
+    def _get_stock_quote_from_xq(self, market: str, normalized_symbol: str) -> dict:
+        xq_symbol = self._to_xq_symbol(market, normalized_symbol)
+        headers = dict(XQ_HEADERS)
+        token = self._get_xq_token()
+        if token:
+            headers["Cookie"] = f"xq_a_token={token};"
+
+        with requests.Session() as session:
+            session.headers.update(headers)
+            session.get(URL3, timeout=REQUEST_TIMEOUT)
+            response = session.get(
+                f"{URL4}{xq_symbol}&extend=detail",
+                timeout=REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                preview = self._truncate_text(response.text)
+                raise ValueError(f"{xq_symbol} 雪球响应不是有效 JSON: {preview}") from exc
+
+        quote = self._extract_xq_quote(payload)
+        if not isinstance(quote, dict):
+            raise ValueError(f"{xq_symbol} 雪球行情返回异常: {self._describe_xq_payload(payload)}")
+        return quote
 
     @staticmethod
     def _get_danjuan_index_code(original_symbol: str, normalized_symbol: str) -> str:
@@ -304,6 +390,261 @@ class Crawler:
             except Exception:
                 self._hk_spot_cache = self._call_akshare(ak.stock_hk_spot_em)
         return self._hk_spot_cache
+
+    def _get_a_spot_cache(self):
+        if self._a_spot_cache is None:
+            self._a_spot_cache = self._call_akshare(ak.stock_zh_a_spot_em)
+        return self._a_spot_cache
+
+    def _get_a_sina_spot_cache(self):
+        if self._a_sina_spot_cache is None:
+            self._a_sina_spot_cache = self._call_akshare(ak.stock_zh_a_spot)
+        return self._a_sina_spot_cache
+
+    def _get_etf_spot_cache(self):
+        if self._etf_spot_cache is None:
+            self._etf_spot_cache = self._call_akshare(ak.fund_etf_spot_em)
+        return self._etf_spot_cache
+
+    def _get_zh_index_spot_cache(self):
+        if self._zh_index_spot_cache is None:
+            self._zh_index_spot_cache = self._call_akshare(ak.stock_zh_index_spot_sina)
+        return self._zh_index_spot_cache
+
+    def _get_hk_index_spot_cache(self):
+        if self._hk_index_spot_cache is None:
+            try:
+                self._hk_index_spot_cache = self._call_akshare(ak.stock_hk_index_spot_em)
+            except Exception:
+                self._hk_index_spot_cache = self._call_akshare(ak.stock_hk_index_spot_sina)
+        return self._hk_index_spot_cache
+
+    def _get_global_index_spot_cache(self):
+        if self._global_index_spot_cache is None:
+            self._global_index_spot_cache = self._call_akshare(ak.index_global_spot_em)
+        return self._global_index_spot_cache
+
+    def _get_stock_quote_from_a_spot(self, original_symbol: str, normalized_symbol: str) -> dict:
+        quote_df = self._get_a_spot_cache()
+        if quote_df.empty or "代码" not in quote_df.columns:
+            raise ValueError(f"{original_symbol} A股实时行情为空")
+        target_row = quote_df[quote_df["代码"].astype(str).str.zfill(6) == normalized_symbol]
+        if target_row.empty:
+            raise ValueError(f"{original_symbol} 未在A股实时行情中找到")
+        row = target_row.iloc[0]
+        return {
+            "name": row.get("名称"),
+            "current": row.get("最新价"),
+            "pb": row.get("市净率"),
+            "dividend_yield": None,
+        }
+
+    def _get_stock_quote_from_a_sina_spot(self, original_symbol: str, normalized_symbol: str) -> dict:
+        quote_df = self._get_a_sina_spot_cache()
+        if quote_df.empty or "代码" not in quote_df.columns:
+            raise ValueError(f"{original_symbol} 新浪A股实时行情为空")
+        sina_symbol = self._to_xq_symbol("A", normalized_symbol).lower()
+        target_row = quote_df[quote_df["代码"].astype(str).str.lower() == sina_symbol]
+        if target_row.empty:
+            raise ValueError(f"{original_symbol} 未在新浪A股实时行情中找到")
+        row = target_row.iloc[0]
+        return {
+            "name": row.get("名称"),
+            "current": row.get("最新价"),
+            "pb": None,
+            "dividend_yield": None,
+        }
+
+    def _get_stock_quote_from_etf_spot(self, original_symbol: str, normalized_symbol: str) -> dict:
+        quote_df = self._get_etf_spot_cache()
+        if quote_df.empty or "代码" not in quote_df.columns:
+            raise ValueError(f"{original_symbol} ETF实时行情为空")
+        target_row = quote_df[quote_df["代码"].astype(str).str.zfill(6) == normalized_symbol]
+        if target_row.empty:
+            raise ValueError(f"{original_symbol} 未在ETF实时行情中找到")
+        row = target_row.iloc[0]
+        return {
+            "name": row.get("名称"),
+            "current": row.get("最新价"),
+            "pb": None,
+            "dividend_yield": None,
+        }
+
+    def _get_index_quote_from_zh_index_spot(self, original_symbol: str, normalized_symbol: str) -> dict:
+        quote_df = self._get_zh_index_spot_cache()
+        if quote_df.empty or "代码" not in quote_df.columns:
+            raise ValueError(f"{original_symbol} A股指数实时行情为空")
+        target_symbols = {
+            normalized_symbol.lower(),
+            normalized_symbol[2:].lower() if normalized_symbol[:2] in {"SH", "SZ"} else normalized_symbol.lower(),
+        }
+        normalized_codes = quote_df["代码"].astype(str).str.lower()
+        target_row = quote_df[normalized_codes.isin(target_symbols)]
+        if target_row.empty:
+            raise ValueError(f"{original_symbol} 未在A股指数实时行情中找到")
+        row = target_row.iloc[0]
+        return {
+            "name": row.get("名称"),
+            "current": row.get("最新价"),
+            "pb": None,
+            "dividend_yield": None,
+        }
+
+    def _get_index_quote_from_zh_index_hist(self, original_symbol: str, normalized_symbol: str) -> dict:
+        raw_code = normalized_symbol[2:] if normalized_symbol[:2] in {"SH", "SZ"} else normalized_symbol
+        name = None
+        close_price = None
+        if raw_code.isdigit():
+            try:
+                csindex_df = self._call_akshare(
+                    ak.stock_zh_index_hist_csindex,
+                    symbol=raw_code,
+                    start_date=(date.today() - timedelta(days=60)).strftime("%Y%m%d"),
+                    end_date=date.today().strftime("%Y%m%d"),
+                )
+                if not csindex_df.empty:
+                    if "指数中文简称" in csindex_df.columns:
+                        name_series = csindex_df["指数中文简称"].dropna()
+                        if not name_series.empty:
+                            name = str(name_series.iloc[-1]).strip()
+                    if name is None and "指数中文全称" in csindex_df.columns:
+                        name_series = csindex_df["指数中文全称"].dropna()
+                        if not name_series.empty:
+                            name = str(name_series.iloc[-1]).strip()
+                    if "收盘" in csindex_df.columns:
+                        close_series = csindex_df["收盘"].dropna()
+                        if not close_series.empty:
+                            close_price = float(close_series.iloc[-1])
+            except Exception:
+                pass
+
+        if close_price is None:
+            em_symbol_candidates = [normalized_symbol.lower()]
+            if raw_code.isdigit():
+                em_symbol_candidates.append(f"csi{raw_code}")
+
+            for candidate in em_symbol_candidates:
+                try:
+                    hist_df = self._call_akshare(
+                        ak.stock_zh_index_daily_em,
+                        symbol=candidate,
+                        start_date=(date.today() - timedelta(days=60)).strftime("%Y%m%d"),
+                        end_date=date.today().strftime("%Y%m%d"),
+                    )
+                except Exception:
+                    continue
+                if hist_df.empty or "close" not in hist_df.columns:
+                    continue
+                close_series = hist_df["close"].dropna()
+                if close_series.empty:
+                    continue
+                close_price = float(close_series.iloc[-1])
+                break
+
+        if close_price is None:
+            raise ValueError(f"{original_symbol} A股指数历史行情为空")
+
+        return {
+            "name": name,
+            "current": close_price,
+            "pb": None,
+            "dividend_yield": None,
+        }
+
+    def _get_index_quote_from_hk_index_spot(self, original_symbol: str, normalized_symbol: str) -> dict:
+        quote_df = self._get_hk_index_spot_cache()
+        if quote_df.empty or "代码" not in quote_df.columns:
+            raise ValueError(f"{original_symbol} 港股指数实时行情为空")
+        candidates = {
+            self._normalize_code_text(normalized_symbol),
+            self._normalize_code_text(normalized_symbol[2:]) if normalized_symbol.startswith("HK") else "",
+        }
+        normalized_codes = quote_df["代码"].astype(str).map(self._normalize_code_text)
+        target_row = quote_df[normalized_codes.isin({item for item in candidates if item})]
+        if target_row.empty:
+            raise ValueError(f"{original_symbol} 未在港股指数实时行情中找到")
+        row = target_row.iloc[0]
+        return {
+            "name": row.get("名称"),
+            "current": row.get("最新价"),
+            "pb": None,
+            "dividend_yield": None,
+        }
+
+    def _get_index_quote_from_global_index_spot(self, original_symbol: str, normalized_symbol: str) -> dict:
+        quote_df = self._get_global_index_spot_cache()
+        if quote_df.empty:
+            raise ValueError(f"{original_symbol} 全球指数实时行情为空")
+
+        alias_map = {
+            ".INX": {"codes": {"SPX", "INX"}, "names": ("标普500", "S&P 500", "标普500指数")},
+            ".IXIC": {"codes": {"IXIC", "COMP"}, "names": ("纳斯达克", "NASDAQ")},
+            ".DJI": {"codes": {"DJI", "DJIA"}, "names": ("道琼斯", "道指")},
+        }
+        alias = alias_map.get(normalized_symbol)
+        if alias is None:
+            raise ValueError(f"{original_symbol} 暂不支持的全球指数代码")
+
+        if "代码" in quote_df.columns:
+            normalized_codes = quote_df["代码"].astype(str).map(self._normalize_code_text)
+            target_row = quote_df[normalized_codes.isin(alias["codes"])]
+            if not target_row.empty:
+                row = target_row.iloc[0]
+                return {
+                    "name": row.get("名称"),
+                    "current": row.get("最新价"),
+                    "pb": None,
+                    "dividend_yield": None,
+                }
+
+        if "名称" in quote_df.columns:
+            normalized_names = quote_df["名称"].astype(str)
+            target_row = quote_df[normalized_names.map(lambda value: any(name in value for name in alias["names"]))]
+            if not target_row.empty:
+                row = target_row.iloc[0]
+                return {
+                    "name": row.get("名称"),
+                    "current": row.get("最新价"),
+                    "pb": None,
+                    "dividend_yield": None,
+                }
+
+        raise ValueError(f"{original_symbol} 未在全球指数实时行情中找到")
+
+    def _get_index_quote_from_us_index_hist(self, original_symbol: str, normalized_symbol: str) -> dict:
+        alias_map = {
+            ".INX": "标普500指数",
+            ".IXIC": "纳斯达克综合指数",
+            ".DJI": "道琼斯工业平均指数",
+            ".NDX": "纳斯达克100指数",
+        }
+        hist_df = self._call_akshare(ak.index_us_stock_sina, symbol=normalized_symbol)
+        if hist_df.empty or "close" not in hist_df.columns:
+            raise ValueError(f"{original_symbol} 美股指数历史行情为空")
+        close_series = hist_df["close"].dropna()
+        if close_series.empty:
+            raise ValueError(f"{original_symbol} 美股指数历史收盘价为空")
+        return {
+            "name": alias_map.get(normalized_symbol, original_symbol),
+            "current": float(close_series.iloc[-1]),
+            "pb": None,
+            "dividend_yield": None,
+        }
+
+    def _get_stock_quote_from_index_fallback(self, original_symbol: str, normalized_symbol: str) -> dict:
+        if normalized_symbol.startswith(("SH", "SZ")):
+            try:
+                return self._get_index_quote_from_zh_index_spot(original_symbol, normalized_symbol)
+            except Exception:
+                return self._get_index_quote_from_zh_index_hist(original_symbol, normalized_symbol)
+        if normalized_symbol.startswith("HK"):
+            return self._get_index_quote_from_hk_index_spot(original_symbol, normalized_symbol)
+        if normalized_symbol.startswith("."):
+            try:
+                return self._get_index_quote_from_global_index_spot(original_symbol, normalized_symbol)
+            except Exception:
+                return self._get_index_quote_from_us_index_hist(original_symbol, normalized_symbol)
+        raise ValueError(f"{original_symbol} 暂无指数备用行情源")
 
     def _get_stock_info_from_hk_spot(self, original_symbol: str, normalized_symbol: str) -> dict:
         quote_df = self._get_hk_spot_cache()
@@ -504,18 +845,85 @@ class Crawler:
         return self._build_ten_year_stats_from_close_series(close_series, price_basis)
 
     def _get_stock_info_from_xq(self, market: str, original_symbol: str, normalized_symbol: str) -> dict:
-        xq_symbol = self._to_xq_symbol(market, normalized_symbol)
-        token = self._get_xq_token()
-        quote_df = self._call_akshare(
-            ak.stock_individual_spot_xq,
-            symbol=xq_symbol,
-            token=token,
-            timeout=AKSHARE_TIMEOUT,
-        )
-        name = self._find_item_value(quote_df, "名称")
-        price = self._to_float(self._find_item_value(quote_df, "现价"))
-        pb = self._to_float(self._find_item_value(quote_df, "市净率"))
-        dividend_yield = self._to_float(self._find_item_value(quote_df, "股息率(TTM)"))
+        quote = {}
+        quote_error = None
+        try:
+            quote = self._get_stock_quote_from_xq(market, normalized_symbol)
+        except Exception as exc:
+            quote_error = f"{exc.__class__.__name__}: {exc}"
+
+        if market == "A" and (
+            quote_error is not None
+            or quote.get("current") in (None, "")
+            or quote.get("name") in (None, "")
+        ):
+            try:
+                fallback_quote = self._get_stock_quote_from_a_spot(original_symbol, normalized_symbol)
+                for key, value in fallback_quote.items():
+                    if quote.get(key) in (None, ""):
+                        quote[key] = value
+                if quote.get("current") not in (None, ""):
+                    quote_error = None
+            except Exception as fallback_exc:
+                if quote_error is None:
+                    quote_error = f"{fallback_exc.__class__.__name__}: {fallback_exc}"
+                else:
+                    quote_error = f"{quote_error}; fallback={fallback_exc.__class__.__name__}: {fallback_exc}"
+
+        if market == "A" and (
+            quote_error is not None
+            or quote.get("current") in (None, "")
+            or quote.get("name") in (None, "")
+        ):
+            try:
+                fallback_quote = self._get_stock_quote_from_a_sina_spot(original_symbol, normalized_symbol)
+                for key, value in fallback_quote.items():
+                    if quote.get(key) in (None, ""):
+                        quote[key] = value
+                if quote.get("current") not in (None, ""):
+                    quote_error = None
+            except Exception as fallback_exc:
+                if quote_error is None:
+                    quote_error = f"{fallback_exc.__class__.__name__}: {fallback_exc}"
+                else:
+                    quote_error = f"{quote_error}; sina_fallback={fallback_exc.__class__.__name__}: {fallback_exc}"
+
+        if market == "A" and (
+            quote_error is not None
+            or quote.get("current") in (None, "")
+            or quote.get("name") in (None, "")
+        ):
+            try:
+                fallback_quote = self._get_stock_quote_from_etf_spot(original_symbol, normalized_symbol)
+                for key, value in fallback_quote.items():
+                    if quote.get(key) in (None, ""):
+                        quote[key] = value
+                if quote.get("current") not in (None, ""):
+                    quote_error = None
+            except Exception as fallback_exc:
+                if quote_error is None:
+                    quote_error = f"{fallback_exc.__class__.__name__}: {fallback_exc}"
+                else:
+                    quote_error = f"{quote_error}; etf_fallback={fallback_exc.__class__.__name__}: {fallback_exc}"
+
+        if market == "INDEX" and (
+            quote_error is not None
+            or quote.get("current") in (None, "")
+            or quote.get("name") in (None, "")
+        ):
+            try:
+                fallback_quote = self._get_stock_quote_from_index_fallback(original_symbol, normalized_symbol)
+                for key, value in fallback_quote.items():
+                    if quote.get(key) in (None, ""):
+                        quote[key] = value
+                if quote.get("current") not in (None, ""):
+                    quote_error = None
+            except Exception as fallback_exc:
+                if quote_error is None:
+                    quote_error = f"{fallback_exc.__class__.__name__}: {fallback_exc}"
+                else:
+                    quote_error = f"{quote_error}; index_fallback={fallback_exc.__class__.__name__}: {fallback_exc}"
+
         ten_year_error = None
         try:
             ten_year_stats = self._get_ten_year_price_stats(market, original_symbol, normalized_symbol)
@@ -554,10 +962,10 @@ class Crawler:
             "market": market,
             "display_symbol": original_symbol.strip().upper(),
             "symbol": normalized_symbol,
-            "name": name,
-            "price": price,
-            "pb": pb,
-            "dividend_yield": dividend_yield,
+            "name": quote.get("name"),
+            "price": self._to_float(quote.get("current")),
+            "pb": self._to_float(quote.get("pb")),
+            "dividend_yield": self._to_float(quote.get("dividend_yield")),
             "ten_year_price_basis": ten_year_price_basis,
             "ten_year_low": ten_year_low,
             "ten_year_high": ten_year_high,
@@ -573,6 +981,7 @@ class Crawler:
             "danjuan_eva_type": danjuan_data.get("danjuan_eva_type"),
             "danjuan_update_time": danjuan_data.get("danjuan_update_time"),
             "danjuan_error": danjuan_error,
+            "error": quote_error,
         })
 
     def _get_single_stock_info_safe(self, original_symbol: str, market: str, normalized_symbol: str) -> dict:
@@ -615,9 +1024,35 @@ class Crawler:
         for symbol in symbols:
             market, normalized_symbol = self._normalize_stock_symbol(symbol)
             normalized_items.append((symbol, market, normalized_symbol))
+        if any(market == "A" for _, market, _ in normalized_items):
+            try:
+                self._get_a_spot_cache()
+            except Exception:
+                pass
+            try:
+                self._get_a_sina_spot_cache()
+            except Exception:
+                pass
+            try:
+                self._get_etf_spot_cache()
+            except Exception:
+                pass
         if any(market == "HK" for _, market, _ in normalized_items):
             try:
                 self._get_hk_spot_cache()
+            except Exception:
+                pass
+        if any(market == "INDEX" for _, market, _ in normalized_items):
+            try:
+                self._get_zh_index_spot_cache()
+            except Exception:
+                pass
+            try:
+                self._get_hk_index_spot_cache()
+            except Exception:
+                pass
+            try:
+                self._get_global_index_spot_cache()
             except Exception:
                 pass
 

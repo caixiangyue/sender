@@ -1,4 +1,4 @@
 requests
 lxml
 aiohttp
-akshare
+akshare>=1.18.58
